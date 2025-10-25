@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Minimal dark theme */
+html, body, :root { height: 100%; }
+
+body {
+  background-color: #0a0a0a; /* neutral-950 */
+  color: #e5e5e5;            /* neutral-200 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Improve readability for markdown content */
+.prose { color: #e5e5e5; }
+.prose a { color: #fafafa; text-decoration: underline; text-underline-offset: 4px; }
+.prose code { background-color: #171717; padding: 0.125rem 0.25rem; border-radius: 0.25rem; }
