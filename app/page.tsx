@@ -13,7 +13,17 @@ const WEEK_KINDS = {
   slides: 'Course Slides',
 } as const;
 
+const RESOURCE_WEIGHT_LABELS = {
+  textbook: 'Textbook',
+  slides: 'Slides',
+  notes: 'Notes',
+  homework: 'Homework',
+  exams: 'Exams',
+  other: 'Other',
+} as const;
+
 type WeekKind = keyof typeof WEEK_KINDS;
+type WeightKind = keyof typeof RESOURCE_WEIGHT_LABELS;
 
 type UploadSummary = {
   id: string;
@@ -45,6 +55,18 @@ type CourseState = {
   weeks: WeekState[];
 };
 
+type RetrievalWeights = Record<WeightKind, number>;
+
+type RetrievalWeightResponse = {
+  course: string;
+  weights: RetrievalWeights;
+  defaults: RetrievalWeights;
+  bounds: {
+    min: number;
+    max: number;
+  };
+};
+
 const MAX_WEEKS = 16;
 
 const formatDate = (value?: string) => {
@@ -68,6 +90,12 @@ export default function TeacherConsole() {
   const [savingWeek, setSavingWeek] = useState<boolean>(false);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [pendingWeek, setPendingWeek] = useState<number>(1);
+  const [weights, setWeights] = useState<RetrievalWeights | null>(null);
+  const [serverWeights, setServerWeights] = useState<RetrievalWeights | null>(null);
+  const [defaultWeights, setDefaultWeights] = useState<RetrievalWeights | null>(null);
+  const [weightBounds, setWeightBounds] = useState<{ min: number; max: number } | null>(null);
+  const [loadingWeights, setLoadingWeights] = useState<boolean>(true);
+  const [savingWeights, setSavingWeights] = useState<boolean>(false);
 
   const fetchWeeks = useCallback(async (course: string) => {
     if (!course) return;
@@ -90,9 +118,36 @@ export default function TeacherConsole() {
     }
   }, []);
 
+  const fetchWeights = useCallback(async (course: string) => {
+    if (!course) return;
+    setLoadingWeights(true);
+    try {
+      const resp = await fetch(`/api/teacher/retrieval-weights?class=${encodeURIComponent(course)}`, {
+        cache: 'no-store',
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to load retrieval weights');
+      }
+      const data = (await resp.json()) as RetrievalWeightResponse;
+      setWeights(data.weights);
+      setServerWeights(data.weights);
+      setDefaultWeights(data.defaults);
+      setWeightBounds(data.bounds);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load retrieval weights';
+      setError(msg);
+      setWeights(null);
+      setServerWeights(null);
+    } finally {
+      setLoadingWeights(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchWeeks(selectedClass);
-  }, [selectedClass, fetchWeeks]);
+    fetchWeights(selectedClass);
+  }, [selectedClass, fetchWeeks, fetchWeights]);
 
   useEffect(() => {
     if (!flash) return;
@@ -155,6 +210,64 @@ export default function TeacherConsole() {
       setUploadingKey(null);
     }
   };
+
+  const handleWeightChange = (kind: WeightKind, value: number) => {
+    setWeights((prev) => {
+      if (!prev) return prev;
+      const rounded = Math.round(value * 100) / 100;
+      return { ...prev, [kind]: rounded };
+    });
+  };
+
+  const handleResetWeights = () => {
+    if (!defaultWeights) return;
+    setWeights({ ...defaultWeights });
+  };
+
+  const handleSaveWeights = async () => {
+    if (!weights || !selectedClass) return;
+    setSavingWeights(true);
+    setError(null);
+    try {
+      const resp = await fetch('/api/teacher/retrieval-weights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class: selectedClass, weights }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to update retrieval weights');
+      }
+      const data = (await resp.json()) as RetrievalWeightResponse;
+      setWeights(data.weights);
+      setServerWeights(data.weights);
+      setDefaultWeights(data.defaults);
+      setWeightBounds(data.bounds);
+      setFlash('Retrieval weights updated for this course.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update retrieval weights';
+      setError(msg);
+    } finally {
+      setSavingWeights(false);
+    }
+  };
+
+  const weightSum = useMemo(() => {
+    if (!weights) return 0;
+    return (Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).reduce((total, key) => total + weights[key], 0);
+  }, [weights]);
+
+  const weightsDirty = useMemo(() => {
+    if (!weights || !serverWeights) return false;
+    return (Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).some((key) => {
+      return Math.abs(weights[key] - serverWeights[key]) > 0.0001;
+    });
+  }, [weights, serverWeights]);
+
+  const canResetToDefaults = useMemo(() => {
+    if (!weights || !defaultWeights) return false;
+    return (Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).some((key) => Math.abs(weights[key] - defaultWeights[key]) > 0.0001);
+  }, [weights, defaultWeights]);
 
   const weeks = useMemo(() => courseState?.weeks ?? [], [courseState]);
 
@@ -235,6 +348,76 @@ export default function TeacherConsole() {
             {flash}
           </div>
         )}
+
+        <div className="rounded-3xl border border-neutral-800 bg-neutral-900/30 p-5 space-y-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">Retrieval Resource Weights</h2>
+            <p className="text-sm text-neutral-400">
+              Tune how strongly each resource type is biased when the AI ranks context for this course. Higher values push that material to the top.
+            </p>
+          </div>
+          {loadingWeights && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-950/30 px-4 py-4 text-sm text-neutral-400">Loading weights…</div>
+          )}
+          {!loadingWeights && weights && (
+            <>
+              <div className="space-y-3">
+                {(Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).map((kind) => {
+                  const label = RESOURCE_WEIGHT_LABELS[kind];
+                  const value = weights[kind];
+                  const defaultValue = defaultWeights?.[kind];
+                  return (
+                    <div key={kind} className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 space-y-3">
+                      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                        <div className="text-sm font-semibold">{label}</div>
+                        <div className="text-xs text-neutral-400">
+                          Current <span className="text-neutral-200">{value.toFixed(2)}</span>
+                          {typeof defaultValue === 'number' && (
+                            <span className="ml-3 text-neutral-500">Default {defaultValue.toFixed(2)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={weightBounds?.min ?? 0}
+                        max={weightBounds?.max ?? 1}
+                        step={0.01}
+                        value={value}
+                        onChange={(event) => handleWeightChange(kind, Number(event.target.value))}
+                        className="w-full accent-neutral-100"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-xs text-neutral-500">
+                Total additive bias: <span className="text-neutral-100">{weightSum.toFixed(2)}</span>. No need to reach 1.0—the retriever adds each value directly to a store&rsquo;s fused score.
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleSaveWeights}
+                  disabled={!weightsDirty || savingWeights}
+                  className="h-11 rounded-2xl bg-white px-4 text-sm font-semibold text-black disabled:opacity-40"
+                >
+                  {savingWeights ? 'Saving…' : weightsDirty ? 'Save weights' : 'Saved'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetWeights}
+                  disabled={!canResetToDefaults || savingWeights}
+                  className="h-11 rounded-2xl border border-neutral-700 px-4 text-sm font-semibold text-neutral-200 disabled:opacity-40"
+                >
+                  Reset to defaults
+                </button>
+              </div>
+            </>
+          )}
+          {!loadingWeights && !weights && (
+            <div className="rounded-2xl border border-red-500/40 bg-red-950/30 px-4 py-4 text-sm text-red-100">
+              Failed to load retrieval weights. Please retry selecting the class.
+            </div>
+          )}
+        </div>
 
         {loading && (
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900/30 px-4 py-6 text-sm text-neutral-400">
