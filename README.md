@@ -2,7 +2,7 @@
 
 ## Setup
 1. `npm i`
-2. Create `.env.local` with the required runtime configuration:
+2. Add these variables to the repo-root `.env` (shared by backend and both UIs):
 ```
 AI_TA_API_BASE_URL="http://localhost:8000"
 NEXT_PUBLIC_SUPABASE_URL="https://kkszhdlglyqbjwqzvkbw.supabase.co"
