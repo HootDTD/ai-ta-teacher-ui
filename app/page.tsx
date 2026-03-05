@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Calendar, CheckCircle2, RefreshCcw, UploadCloud } from 'lucide-react';
-
-const CLASS_OPTIONS = [
-  { value: 'AAE 33300: Introduction to Fluid Mechanics', label: 'AAE 33300: Introduction to Fluid Mechanics' },
-];
+import {
+  SUPABASE_AUTH_ENABLED,
+  clearStoredSession,
+  ensureActiveSession,
+  loadStoredSession,
+  saveStoredSession,
+  signInWithPassword,
+  type StoredSession,
+} from './lib/auth';
 
 const WEEK_KINDS = {
   notes: 'Course Notes',
@@ -24,6 +29,13 @@ const RESOURCE_WEIGHT_LABELS = {
 
 type WeekKind = keyof typeof WEEK_KINDS;
 type WeightKind = keyof typeof RESOURCE_WEIGHT_LABELS;
+
+type ClassOption = {
+  id: number;
+  slug: string;
+  name: string;
+  subject_name: string;
+};
 
 type UploadSummary = {
   id: string;
@@ -49,6 +61,7 @@ type WeekState = {
 };
 
 type CourseState = {
+  search_space_id: number;
   course: string;
   slug: string;
   current_week: number;
@@ -58,6 +71,7 @@ type CourseState = {
 type RetrievalWeights = Record<WeightKind, number>;
 
 type RetrievalWeightResponse = {
+  search_space_id: number;
   course: string;
   weights: RetrievalWeights;
   defaults: RetrievalWeights;
@@ -82,7 +96,15 @@ const formatDate = (value?: string) => {
 };
 
 export default function TeacherConsole() {
-  const [selectedClass, setSelectedClass] = useState<string>(CLASS_OPTIONS[0]?.value ?? '');
+  const [authReady, setAuthReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [session, setSession] = useState<StoredSession | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
   const [courseState, setCourseState] = useState<CourseState | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,13 +118,100 @@ export default function TeacherConsole() {
   const [weightBounds, setWeightBounds] = useState<{ min: number; max: number } | null>(null);
   const [loadingWeights, setLoadingWeights] = useState<boolean>(true);
   const [savingWeights, setSavingWeights] = useState<boolean>(false);
+  const accessToken = session?.access_token || '';
+  const userLabel = session?.user_email || session?.user_id || 'Signed in';
 
-  const fetchWeeks = useCallback(async (course: string) => {
-    if (!course) return;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!SUPABASE_AUTH_ENABLED) {
+        if (!cancelled) {
+          setAuthError('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be configured.');
+          setSession(null);
+          setAuthReady(true);
+        }
+        return;
+      }
+
+      const active = await ensureActiveSession(loadStoredSession());
+      if (cancelled) return;
+      if (active) {
+        saveStoredSession(active);
+        setSession(active);
+      } else {
+        clearStoredSession();
+        setSession(null);
+      }
+      setAuthReady(true);
+    })().catch((err: unknown) => {
+      if (cancelled) return;
+      const msg = err instanceof Error ? err.message : 'Failed to initialize auth session.';
+      setAuthError(msg);
+      setAuthReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fetchClassOptions = useCallback(async () => {
+    if (!accessToken) {
+      setClassOptions([]);
+      setSelectedClassId(null);
+      setCourseState(null);
+      setWeights(null);
+      setServerWeights(null);
+      setDefaultWeights(null);
+      setWeightBounds(null);
+      setLoadingClasses(false);
+      return;
+    }
+    setLoadingClasses(true);
+    setError(null);
+    try {
+      const resp = await fetch('/api/classes', {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to load classes');
+      }
+      const data = (await resp.json()) as ClassOption[];
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('No classes are available for this account.');
+      }
+      setClassOptions(data);
+      setSelectedClassId((previous) => {
+        if (previous && data.some((option) => option.id === previous)) {
+          return previous;
+        }
+        return data[0].id;
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load classes';
+      setError(msg);
+      setClassOptions([]);
+      setSelectedClassId(null);
+      setCourseState(null);
+      setWeights(null);
+      setServerWeights(null);
+      setDefaultWeights(null);
+      setWeightBounds(null);
+    } finally {
+      setLoadingClasses(false);
+    }
+  }, [accessToken]);
+
+  const fetchWeeks = useCallback(async (searchSpaceId: number) => {
+    if (!accessToken || !Number.isFinite(searchSpaceId) || searchSpaceId <= 0) return;
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(`/api/teacher/weeks?class=${encodeURIComponent(course)}`, { cache: 'no-store' });
+      const resp = await fetch(`/api/teacher/weeks?search_space_id=${searchSpaceId}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(text || 'Failed to load weekly uploads');
@@ -116,14 +225,15 @@ export default function TeacherConsole() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
-  const fetchWeights = useCallback(async (course: string) => {
-    if (!course) return;
+  const fetchWeights = useCallback(async (searchSpaceId: number) => {
+    if (!accessToken || !Number.isFinite(searchSpaceId) || searchSpaceId <= 0) return;
     setLoadingWeights(true);
     try {
-      const resp = await fetch(`/api/teacher/retrieval-weights?class=${encodeURIComponent(course)}`, {
+      const resp = await fetch(`/api/teacher/retrieval-weights?search_space_id=${searchSpaceId}`, {
         cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) {
         const text = await resp.text();
@@ -142,12 +252,30 @@ export default function TeacherConsole() {
     } finally {
       setLoadingWeights(false);
     }
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
-    fetchWeeks(selectedClass);
-    fetchWeights(selectedClass);
-  }, [selectedClass, fetchWeeks, fetchWeights]);
+    if (!authReady) return;
+    void fetchClassOptions();
+  }, [authReady, fetchClassOptions]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!accessToken) {
+      setCourseState(null);
+      setLoading(false);
+      setLoadingWeights(false);
+      return;
+    }
+    if (!selectedClassId) {
+      setCourseState(null);
+      setLoading(false);
+      setLoadingWeights(false);
+      return;
+    }
+    void fetchWeeks(selectedClassId);
+    void fetchWeights(selectedClassId);
+  }, [accessToken, authReady, selectedClassId, fetchWeeks, fetchWeights]);
 
   useEffect(() => {
     if (!flash) return;
@@ -155,7 +283,46 @@ export default function TeacherConsole() {
     return () => clearTimeout(timer);
   }, [flash]);
 
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAuthError(null);
+    if (!email.trim() || !password) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const nextSession = await signInWithPassword(email.trim(), password);
+      saveStoredSession(nextSession);
+      setSession(nextSession);
+      setPassword('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign in failed.';
+      setAuthError(msg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    clearStoredSession();
+    setSession(null);
+    setClassOptions([]);
+    setSelectedClassId(null);
+    setCourseState(null);
+    setWeights(null);
+    setServerWeights(null);
+    setDefaultWeights(null);
+    setWeightBounds(null);
+    setFlash(null);
+    setError(null);
+  };
+
   const handleCurrentWeekSave = async () => {
+    if (!accessToken) {
+      setError('Sign in is required.');
+      return;
+    }
     if (!courseState) return;
     if (pendingWeek === courseState.current_week) return;
     setSavingWeek(true);
@@ -163,8 +330,14 @@ export default function TeacherConsole() {
     try {
       const resp = await fetch('/api/teacher/current-week', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ class: selectedClass, current_week: pendingWeek }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          search_space_id: courseState.search_space_id,
+          current_week: pendingWeek,
+        }),
       });
       if (!resp.ok) {
         const text = await resp.text();
@@ -182,26 +355,31 @@ export default function TeacherConsole() {
   };
 
   const handleUpload = async (file: File | null, week: number, kind: WeekKind) => {
-    if (!file || !selectedClass) return;
+    if (!accessToken) {
+      setError('Sign in is required.');
+      return;
+    }
+    if (!file || !selectedClassId) return;
     const key = `${week}-${kind}`;
     setUploadingKey(key);
     setError(null);
     try {
       const formData = new FormData();
-      formData.append('class', selectedClass);
+      formData.append('search_space_id', String(selectedClassId));
       formData.append('week', String(week));
       formData.append('kind', kind);
       formData.append('title', `${WEEK_KINDS[kind]} · Week ${week}`);
       formData.append('file', file);
       const resp = await fetch('/api/teacher/upload', {
         method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: formData,
       });
       if (!resp.ok) {
         const text = await resp.text();
         throw new Error(text || 'Upload failed');
       }
-      await fetchWeeks(selectedClass);
+      await fetchWeeks(selectedClassId);
       setFlash(`${WEEK_KINDS[kind]} for week ${week} uploaded.`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
@@ -225,14 +403,21 @@ export default function TeacherConsole() {
   };
 
   const handleSaveWeights = async () => {
-    if (!weights || !selectedClass) return;
+    if (!accessToken) {
+      setError('Sign in is required.');
+      return;
+    }
+    if (!weights || !selectedClassId) return;
     setSavingWeights(true);
     setError(null);
     try {
       const resp = await fetch('/api/teacher/retrieval-weights', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ class: selectedClass, weights }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ search_space_id: selectedClassId, weights }),
       });
       if (!resp.ok) {
         const text = await resp.text();
@@ -270,13 +455,95 @@ export default function TeacherConsole() {
   }, [weights, defaultWeights]);
 
   const weeks = useMemo(() => courseState?.weeks ?? [], [courseState]);
+  const selectedClassMeta = useMemo(
+    () => classOptions.find((option) => option.id === selectedClassId) ?? null,
+    [classOptions, selectedClassId],
+  );
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center px-4">
+        <div className="text-sm text-neutral-300">Checking authentication…</div>
+      </div>
+    );
+  }
+
+  if (!SUPABASE_AUTH_ENABLED) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center px-4">
+        <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-red-100">
+          Supabase auth is not configured. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center px-4">
+        <form
+          onSubmit={handleSignIn}
+          className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 space-y-4"
+        >
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">Teacher sign in</h1>
+            <p className="mt-1 text-sm text-neutral-400">Use your Supabase account with teacher membership.</p>
+          </div>
+          {authError && (
+            <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+              {authError}
+            </div>
+          )}
+          <label className="block text-sm text-neutral-300">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              className="mt-1 w-full h-10 rounded-xl border border-neutral-700 bg-neutral-950 px-3 outline-none focus:ring-2 focus:ring-neutral-600"
+            />
+          </label>
+          <label className="block text-sm text-neutral-300">
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              className="mt-1 w-full h-10 rounded-xl border border-neutral-700 bg-neutral-950 px-3 outline-none focus:ring-2 focus:ring-neutral-600"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={authLoading}
+            className="h-10 w-full rounded-xl bg-white text-black text-sm font-semibold disabled:opacity-50"
+          >
+            {authLoading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
       <header className="border-b border-neutral-800 sticky top-0 backdrop-blur supports-[backdrop-filter]:bg-neutral-950/70">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
           <div className="font-semibold tracking-tight">Hoot • Teacher Console</div>
-          <div className="text-xs text-neutral-400">Upload slides + notes → PNG + embeddings</div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-neutral-400 hidden md:block">Upload slides + notes → PNG + embeddings</div>
+            <div className="text-xs text-neutral-400 hidden lg:block max-w-[220px] truncate" title={userLabel}>
+              {userLabel}
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="px-3 py-1.5 rounded-md border border-neutral-700 text-sm text-neutral-200 hover:bg-neutral-800 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -286,16 +553,23 @@ export default function TeacherConsole() {
             <label className="flex flex-col text-sm text-neutral-300">
               <span className="text-xs uppercase tracking-wide text-neutral-400">Class</span>
               <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
+                value={selectedClassId ?? ''}
+                onChange={(e) => setSelectedClassId(Number(e.target.value))}
+                disabled={loadingClasses || classOptions.length === 0}
                 className="mt-1 h-11 rounded-2xl border border-neutral-800 bg-neutral-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-600"
               >
-                {CLASS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                {classOptions.length === 0 && <option value="">No classes available</option>}
+                {classOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </select>
+              {selectedClassMeta && (
+                <span className="mt-1 text-xs text-neutral-500">
+                  Slug: {selectedClassMeta.slug} · Subject: {selectedClassMeta.subject_name || '—'}
+                </span>
+              )}
             </label>
 
             <div className="w-full md:w-auto">
@@ -329,7 +603,7 @@ export default function TeacherConsole() {
               </div>
               <p className="mt-2 text-xs text-neutral-500 flex items-center gap-2">
                 <Calendar className="h-3.5 w-3.5" />
-                Students see only the uploads from the active week.
+                Students see uploads through the active week.
               </p>
             </div>
           </div>

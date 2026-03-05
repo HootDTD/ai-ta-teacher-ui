@@ -3,7 +3,8 @@ import { NextRequest } from 'next/server';
 export const runtime = 'nodejs';
 
 function getBackendBaseUrl(): string | null {
-  return process.env.AI_TA_API_BASE_URL ?? null;
+  const rawBackend = process.env.AI_TA_API_BASE_URL;
+  return rawBackend ? rawBackend.replace(/\/+$/, '') : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -14,7 +15,10 @@ export async function GET(req: NextRequest) {
 
   const params = req.nextUrl.searchParams.toString();
   const url = `${backend}/teacher/retrieval-weights${params ? `?${params}` : ''}`;
-  const resp = await fetch(url, { cache: 'no-store' });
+  const authHeader = req.headers.get('authorization');
+  const headers: Record<string, string> = {};
+  if (authHeader) headers.Authorization = authHeader;
+  const resp = await fetch(url, { headers, cache: 'no-store' });
   const body = await resp.text();
 
   return new Response(body, {
@@ -33,9 +37,12 @@ export async function POST(req: Request) {
   }
 
   const body = await req.text();
+  const authHeader = req.headers.get('authorization');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(`${backend}/teacher/retrieval-weights`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body,
     cache: 'no-store',
   });

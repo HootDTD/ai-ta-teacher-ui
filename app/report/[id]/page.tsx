@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useParams } from 'next/navigation';
+import {
+  clearStoredSession,
+  ensureActiveSession,
+  loadStoredSession,
+  saveStoredSession,
+  type StoredSession,
+} from '../../lib/auth';
 
 type Report = {
   id: string;
@@ -19,15 +26,51 @@ type Report = {
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const [authReady, setAuthReady] = useState(false);
+  const [session, setSession] = useState<StoredSession | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [data, setData] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const active = await ensureActiveSession(loadStoredSession());
+      if (cancelled) return;
+      if (active) {
+        saveStoredSession(active);
+        setSession(active);
+      } else {
+        clearStoredSession();
+        setSession(null);
+      }
+      setAuthReady(true);
+    })().catch((err: unknown) => {
+      if (cancelled) return;
+      const msg = err instanceof Error ? err.message : 'Failed to initialize auth session.';
+      setAuthError(msg);
+      setAuthReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!session?.access_token) {
+      setError('Sign in is required to view reports.');
+      setData(null);
+      return;
+    }
+    setError(null);
     let alive = true;
     (async () => {
       try {
-        const resp = await fetch(`/api/reports/ai-use/${id}`);
+        const resp = await fetch(`/api/reports/ai-use/${id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const j = (await resp.json()) as Report;
         if (alive) setData(j);
@@ -39,7 +82,7 @@ export default function ReportPage() {
       }
     })();
     return () => { alive = false; };
-  }, [id]);
+  }, [authReady, id, session?.access_token]);
 
   const truncated = Boolean(data?.jsonld?.evidence?.truncated);
   const modelNames = ((): string => {
@@ -75,8 +118,14 @@ export default function ReportPage() {
   };
 
   const exportPdf = async () => {
+    if (!session?.access_token) {
+      alert('Sign in is required to export reports.');
+      return;
+    }
     try {
-      const resp = await fetch(`/api/reports/ai-use/${id}/pdf`);
+      const resp = await fetch(`/api/reports/ai-use/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       if (!resp.ok) {
         const txt = await resp.text().catch(() => '');
         alert(`Export failed (HTTP ${resp.status})${txt ? `: ${txt}` : ''}`);
@@ -98,6 +147,11 @@ export default function ReportPage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
       <div className="mx-auto max-w-5xl px-4 py-6 grid md:grid-cols-[1fr_260px] gap-6">
         <div>
+          {authError && (
+            <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 text-red-200 p-3 text-sm">
+              {authError}
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-xl font-semibold">AI-use Report</h1>
             <div className="flex gap-2">
@@ -115,7 +169,7 @@ export default function ReportPage() {
           )}
 
           {error && <div className="text-red-400">{error}</div>}
-          {!data && !error && <div className="text-neutral-400">Loading…</div>}
+          {!data && !error && <div className="text-neutral-400">{authReady ? 'Loading…' : 'Checking session…'}</div>}
           {data?.markdown && (
             <article className="prose prose-invert max-w-none">
               <ReactMarkdown>{data.markdown}</ReactMarkdown>

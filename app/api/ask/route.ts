@@ -9,9 +9,12 @@ export async function POST(req: Request) {
 
   // Forward raw body to preserve streaming compatibility
   const body = await req.text();
+  const authHeader = req.headers.get('authorization');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(`${backend}/ask`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body,
   });
 
