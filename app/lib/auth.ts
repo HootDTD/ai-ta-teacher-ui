@@ -6,6 +6,11 @@ export type StoredSession = {
   user_email?: string;
 };
 
+export type SignUpResult = {
+  session: StoredSession | null;
+  requiresEmailConfirmation: boolean;
+};
+
 export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const SUPABASE_AUTH_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -67,6 +72,31 @@ export async function signInWithPassword(email: string, password: string): Promi
     throw new Error('Sign in did not return an access token.');
   }
   return session;
+}
+
+export async function signUpWithPassword(email: string, password: string): Promise<SignUpResult> {
+  if (!SUPABASE_AUTH_ENABLED) {
+    throw new Error('Supabase auth is not configured.');
+  }
+  const resp = await fetch(authEndpoint('signup'), {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const body: TokenResponse = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const msg = String(body.error_description || body.msg || body.error || 'Sign up failed.');
+    throw new Error(msg);
+  }
+  const mapped = mapTokenResponse(body);
+  const session = mapped.access_token ? mapped : null;
+  return {
+    session,
+    requiresEmailConfirmation: session === null,
+  };
 }
 
 export async function refreshSession(refreshToken: string): Promise<StoredSession> {

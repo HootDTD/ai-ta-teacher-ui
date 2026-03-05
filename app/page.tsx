@@ -10,6 +10,7 @@ import {
   loadStoredSession,
   saveStoredSession,
   signInWithPassword,
+  signUpWithPassword,
   type StoredSession,
 } from './lib/auth';
 
@@ -99,6 +100,7 @@ export default function TeacherConsole() {
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [session, setSession] = useState<StoredSession | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -286,6 +288,7 @@ export default function TeacherConsole() {
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAuthError(null);
+    setAuthNotice(null);
     if (!email.trim() || !password) {
       setAuthError('Email and password are required.');
       return;
@@ -298,6 +301,35 @@ export default function TeacherConsole() {
       setPassword('');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign in failed.';
+      setAuthError(msg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    setAuthError(null);
+    setAuthNotice(null);
+    if (!email.trim() || !password) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const result = await signUpWithPassword(email.trim(), password);
+      if (result.session) {
+        saveStoredSession(result.session);
+        setSession(result.session);
+        setPassword('');
+        return;
+      }
+      setAuthNotice(
+        result.requiresEmailConfirmation
+          ? 'Account created. Check your email to confirm, then sign in.'
+          : 'Account created. You can sign in now.',
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign up failed.';
       setAuthError(msg);
     } finally {
       setAuthLoading(false);
@@ -494,6 +526,11 @@ export default function TeacherConsole() {
               {authError}
             </div>
           )}
+          {authNotice && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-100">
+              {authNotice}
+            </div>
+          )}
           <label className="block text-sm text-neutral-300">
             Email
             <input
@@ -521,6 +558,17 @@ export default function TeacherConsole() {
           >
             {authLoading ? 'Signing in…' : 'Sign in'}
           </button>
+          <button
+            type="button"
+            disabled={authLoading}
+            onClick={handleSignUp}
+            className="h-10 w-full rounded-xl border border-neutral-700 text-sm font-semibold text-neutral-200 disabled:opacity-50"
+          >
+            {authLoading ? 'Working…' : 'Create account'}
+          </button>
+          <p className="text-xs text-neutral-500">
+            New accounts also need `course_memberships` with the correct role.
+          </p>
         </form>
       </div>
     );
