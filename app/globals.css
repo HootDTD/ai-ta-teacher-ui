@@ -14,7 +14,7 @@
   --success: #28593f;
   --warning: #8a6712;
   --danger: #8a2818;
-  --font-stack: Georgia, "Times New Roman", serif;
+  --font-stack: system-ui, -apple-system, sans-serif;
 }
 
 *,
@@ -31,7 +31,7 @@ body,
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, var(--bg-soft) 0%, var(--bg) 100%);
+  background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-stack);
   -webkit-font-smoothing: antialiased;
@@ -88,7 +88,7 @@ a {
 }
 
 .teacher-panel {
-  background: linear-gradient(145deg, rgba(236, 228, 214, 0.94), rgba(221, 208, 190, 0.8));
+  background: var(--surface);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.08);
 }
 
@@ -103,8 +103,8 @@ a {
 
 .teacher-input {
   border: 1px solid var(--border);
-  background: rgba(248, 244, 238, 0.92);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  background: var(--surface-subtle);
+  box-shadow: none;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -115,7 +115,7 @@ a {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--focus-ring);
-  background: rgba(252, 248, 243, 0.96);
+  background: var(--surface);
 }
 
 .teacher-input:disabled,
@@ -146,11 +146,18 @@ a {
 .teacher-button-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--bg-soft);
+  color: #ffffff;
 }
 
 .teacher-button-primary:hover:not(:disabled) {
-  background: #121212;
+  background: #222;
+}
+
+.teacher-button-primary:disabled {
+  border-color: var(--border);
+  background: var(--border);
+  color: #ffffff;
+  opacity: 1;
 }
 
 .teacher-button-secondary {

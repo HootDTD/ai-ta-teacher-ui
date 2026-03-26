@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Calendar, CheckCircle2, RefreshCcw, UploadCloud } from 'lucide-react';
+import { Calendar, RefreshCcw, UploadCloud } from 'lucide-react';
 import {
   SUPABASE_AUTH_ENABLED,
   clearStoredSession,
@@ -20,12 +20,8 @@ const WEEK_KINDS = {
 } as const;
 
 const RESOURCE_WEIGHT_LABELS = {
-  textbook: 'Textbook',
   slides: 'Slides',
   notes: 'Notes',
-  homework: 'Homework',
-  exams: 'Exams',
-  other: 'Other',
 } as const;
 
 type WeekKind = keyof typeof WEEK_KINDS;
@@ -93,77 +89,12 @@ type RetrievalWeightResponse = {
 const MAX_WEEKS = 16;
 const POLL_INTERVAL_MS = 4000;
 
-const formatDate = (value?: string) => {
-  if (!value) return 'Unknown date';
-  try {
-    return new Intl.DateTimeFormat('en', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-};
 
-const STATUS_LABELS: Record<UploadStatus, string> = {
-  queued: 'Queued',
-  processing: 'Processing',
-  ready: 'Ready',
-  failed: 'Failed',
-  superseded: 'Superseded',
-};
 
 const isPendingStatus = (status?: string): status is 'queued' | 'processing' => {
   return status === 'queued' || status === 'processing';
 };
 
-const getStatusPillClass = (status?: string) => {
-  switch (status) {
-    case 'ready':
-      return 'teacher-pill teacher-pill--success';
-    case 'failed':
-      return 'teacher-pill teacher-pill--danger';
-    case 'queued':
-    case 'processing':
-      return 'teacher-pill teacher-pill--warning';
-    case 'superseded':
-      return 'teacher-pill teacher-pill--neutral';
-    default:
-      return 'teacher-pill';
-  }
-};
-
-const hasUploadWarnings = (upload: UploadSummary | null | undefined) => {
-  if (!upload) return false;
-  if ((upload.warning_count ?? 0) > 0) return true;
-  const summary = upload.ocr_summary ?? {};
-  return Boolean(summary.degraded || summary.partial_success || summary.has_warnings);
-};
-
-const summarizeOcr = (upload: UploadSummary | null | undefined) => {
-  if (!upload) return null;
-  const summary = upload.ocr_summary ?? {};
-  const parts: string[] = [];
-  const nativePages = summary.native_pages;
-  const mathpixPages = summary.mathpix_pages;
-  const degradedPages = summary.degraded_pages;
-
-  if (typeof nativePages === 'number') parts.push(`${nativePages} native`);
-  if (typeof mathpixPages === 'number') parts.push(`${mathpixPages} Mathpix`);
-  if (typeof degradedPages === 'number' && degradedPages > 0) parts.push(`${degradedPages} degraded`);
-  if (upload.ocr_provider) parts.push(`provider: ${upload.ocr_provider}`);
-
-  return parts.length > 0 ? parts.join(' · ') : null;
-};
-
-const buildUploadTiming = (upload: UploadSummary | null | undefined) => {
-  if (!upload) return null;
-  if (upload.status === 'processing' && upload.started_at) return `Started ${formatDate(upload.started_at)}`;
-  if (upload.status === 'queued') return `Queued ${formatDate(upload.uploaded_at)}`;
-  if (upload.completed_at) return `Completed ${formatDate(upload.completed_at)}`;
-  if (upload.uploaded_at) return `Uploaded ${formatDate(upload.uploaded_at)}`;
-  return null;
-};
 
 export default function TeacherConsole() {
   const [authReady, setAuthReady] = useState(false);
@@ -595,10 +526,6 @@ export default function TeacherConsole() {
     }
   };
 
-  const weightSum = useMemo(() => {
-    if (!weights) return 0;
-    return (Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).reduce((total, key) => total + weights[key], 0);
-  }, [weights]);
 
   const weightsDirty = useMemo(() => {
     if (!weights || !serverWeights) return false;
@@ -612,10 +539,6 @@ export default function TeacherConsole() {
     return (Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).some((key) => Math.abs(weights[key] - defaultWeights[key]) > 0.0001);
   }, [weights, defaultWeights]);
 
-  const selectedClassMeta = useMemo(
-    () => classOptions.find((option) => option.id === selectedClassId) ?? null,
-    [classOptions, selectedClassId],
-  );
 
   if (!authReady) {
     return (
@@ -691,9 +614,6 @@ export default function TeacherConsole() {
           >
             {authLoading ? 'Working…' : 'Create account'}
           </button>
-          <p className="text-xs teacher-muted">
-            New accounts also need `course_memberships` with the correct role.
-          </p>
         </form>
       </div>
     );
@@ -703,9 +623,8 @@ export default function TeacherConsole() {
     <div className="min-h-screen teacher-shell flex flex-col">
       <header className="teacher-header border-b sticky top-0 backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
-          <div className="teacher-brand font-semibold tracking-tight">Hoot • Teacher Console</div>
+          <div className="teacher-brand font-semibold tracking-tight">Hoot | Teacher Console</div>
           <div className="flex items-center gap-3">
-            <div className="text-xs teacher-muted hidden md:block">Upload slides + notes → PNG + embeddings</div>
             <div className="text-xs teacher-muted hidden lg:block max-w-[220px] truncate" title={userLabel}>
               {userLabel}
             </div>
@@ -721,15 +640,15 @@ export default function TeacherConsole() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-6 space-y-4">
-        <div className="rounded-3xl teacher-panel p-5 space-y-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <label className="flex flex-col text-sm teacher-muted">
-              <span className="text-xs uppercase tracking-wide teacher-muted">Class</span>
+        <div className="rounded-3xl teacher-panel p-5">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
+            <div className="flex flex-col">
+              <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Class</span>
               <select
                 value={selectedClassId ?? ''}
                 onChange={(e) => setSelectedClassId(Number(e.target.value))}
                 disabled={loadingClasses || classOptions.length === 0}
-                className="teacher-input mt-1 h-11 rounded-2xl px-3 text-sm"
+                className="teacher-input h-10 rounded-2xl px-3 text-sm"
               >
                 {classOptions.length === 0 && <option value="">No classes available</option>}
                 {classOptions.map((option) => (
@@ -738,51 +657,41 @@ export default function TeacherConsole() {
                   </option>
                 ))}
               </select>
-              {selectedClassMeta && (
-                <span className="mt-1 text-xs teacher-muted">
-                  Slug: {selectedClassMeta.slug} · Subject: {selectedClassMeta.subject_name || '—'}
-                </span>
-              )}
-            </label>
+            </div>
 
-            <div className="w-full md:w-auto">
-              <div className="flex items-end gap-3">
-                <label className="flex flex-col text-sm teacher-muted">
-                  <span className="text-xs uppercase tracking-wide teacher-muted">Current Week</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={MAX_WEEKS}
-                    value={pendingWeek}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      if (Number.isNaN(value)) {
-                        setPendingWeek(1);
-                        return;
-                      }
-                      const clamped = Math.min(MAX_WEEKS, Math.max(1, value));
-                      setPendingWeek(clamped);
-                    }}
-                    className="teacher-input mt-1 h-11 w-28 rounded-2xl px-3 text-center text-lg"
-                  />
-                </label>
+            <div className="flex flex-col">
+              <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Current Week</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_WEEKS}
+                  value={pendingWeek}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    if (Number.isNaN(value)) {
+                      setPendingWeek(1);
+                      return;
+                    }
+                    const clamped = Math.min(MAX_WEEKS, Math.max(1, value));
+                    setPendingWeek(clamped);
+                  }}
+                  className="teacher-input h-10 w-16 rounded-2xl px-2 text-center text-sm"
+                />
                 <button
                   onClick={handleCurrentWeekSave}
                   disabled={savingWeek || !courseState || pendingWeek === courseState.current_week}
-                  className="teacher-button-primary h-11 rounded-2xl px-4 text-sm font-semibold"
+                  className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold"
                 >
                   {savingWeek ? 'Saving…' : 'Update'}
                 </button>
               </div>
-              <p className="mt-2 text-xs teacher-muted flex items-center gap-2">
+              <p className="text-xs teacher-muted flex items-center gap-1.5 mt-1">
                 <Calendar className="h-3.5 w-3.5" />
                 Students see uploads through the active week.
               </p>
             </div>
           </div>
-          <p className="text-xs teacher-muted">
-            Upload PDFs for course notes and slides each week. We automatically render every page to PNG, run OCR, and embed the text separate from the textbook index so the assistant can reference only what is relevant for the current week.
-          </p>
         </div>
 
         {error && (
@@ -798,7 +707,7 @@ export default function TeacherConsole() {
         {hasPendingUploads && (
           <div className="rounded-2xl teacher-alert teacher-alert--warning px-4 py-3 text-sm flex items-center gap-2">
             <RefreshCcw className="h-4 w-4 animate-spin" />
-            Polling for teacher upload status updates every {POLL_INTERVAL_MS / 1000} seconds.
+            Uploads are being processed. This page will update automatically.
           </div>
         )}
 
@@ -806,7 +715,7 @@ export default function TeacherConsole() {
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold teacher-section-title">Retrieval Resource Weights</h2>
             <p className="text-sm teacher-muted">
-              Tune how strongly each resource type is biased when the AI ranks context for this course. Higher values push that material to the top.
+              Adjust how much the AI prioritises each resource type. Higher values push that material to the top.
             </p>
           </div>
           {loadingWeights && (
@@ -842,9 +751,6 @@ export default function TeacherConsole() {
                     </div>
                   );
                 })}
-              </div>
-              <div className="text-xs teacher-muted">
-                Total additive bias: <span className="teacher-value">{weightSum.toFixed(2)}</span>. No need to reach 1.0—the retriever adds each value directly to a store&rsquo;s fused score.
               </div>
               <div className="flex flex-wrap gap-3">
                 <button
@@ -898,167 +804,51 @@ export default function TeacherConsole() {
                   const section = kind === 'notes' ? week.notes : week.slides;
                   const latest = section.latest;
                   const uploading = uploadingKey === `${week.week}-${kind}`;
-                  const inFlightReplacement =
+                  const pendingAttempt =
                     section.history.find((entry) => entry.id !== latest?.id && isPendingStatus(entry.status)) ?? null;
-                  const failedReplacement =
-                    section.history.find((entry) => entry.id !== latest?.id && entry.status === 'failed') ?? null;
-                  const currentAttempt =
-                    inFlightReplacement ?? failedReplacement ?? (!latest ? section.history[0] ?? null : null);
-                  const previous = section.history
-                    .filter((entry) => entry.id !== latest?.id && entry.id !== currentAttempt?.id)
-                    .slice(0, 3);
-                  const currentAttemptSummary = summarizeOcr(currentAttempt);
-                  const latestSummary = summarizeOcr(latest);
+                  const failedAttempt =
+                    section.history.find((entry) => entry.id !== latest?.id && entry.status === 'failed') ??
+                    (!latest ? section.history.find((entry) => entry.status === 'failed') ?? null : null);
                   return (
                     <div key={kind} className="rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-wide teacher-muted">{WEEK_KINDS[kind]}</p>
-                          <p className="text-lg font-semibold teacher-section-title">
-                            {latest?.title || currentAttempt?.title || 'No upload yet'}
-                          </p>
-                        </div>
-                        {latest ? (
-                          <CheckCircle2 className="h-5 w-5 teacher-icon-success" />
-                        ) : isPendingStatus(currentAttempt?.status) ? (
-                          <RefreshCcw className="h-5 w-5 teacher-icon-warning animate-spin" />
-                        ) : (
-                          <AlertCircle className="h-5 w-5 teacher-icon-warning" />
-                        )}
-                      </div>
-                      {latest ? (
-                        <div className="rounded-2xl teacher-panel px-3 py-3 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold teacher-section-title">Last successful upload</div>
-                            <span className={`${getStatusPillClass(latest.status)} rounded-full px-3 py-1 text-xs`}>
-                              {STATUS_LABELS[latest.status ?? 'ready']}
-                            </span>
-                          </div>
-                          <div className="text-sm teacher-muted">
-                            {buildUploadTiming(latest) || 'Completed'} · {latest.page_count ? `${latest.page_count} pages` : 'page count pending'}
-                          </div>
-                          <div className="rounded-2xl teacher-panel-subtle px-3 py-3 text-xs teacher-muted space-y-1">
-                            <div>Filename: {latest.source_name || '—'}</div>
-                            <div>Doc ID: {latest.doc_id || '—'}</div>
-                            <div>OCR: {latestSummary || 'Summary pending'}</div>
-                          </div>
-                          {hasUploadWarnings(latest) && (
-                            <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-xs">
-                              {latest.warning_count ? `${latest.warning_count} extraction warning(s). ` : ''}
-                              Weekly retrieval stays active, but some pages were degraded during extraction.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl teacher-panel-subtle px-3 py-3 text-sm teacher-muted">
-                          No successful upload yet. Upload a PDF to make this week retrievable.
+                      {latest && (
+                        <div className="text-sm teacher-muted">
+                          {latest.source_name || latest.title} · {latest.page_count ? `${latest.page_count} pages` : 'Processing'}
                         </div>
                       )}
-                      {currentAttempt && currentAttempt.id !== latest?.id && (
-                        <div
-                          className={`rounded-2xl px-3 py-3 space-y-2 ${
-                            currentAttempt.status === 'failed'
-                              ? 'teacher-alert teacher-alert--danger'
-                              : 'teacher-alert teacher-alert--warning'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold">
-                              {latest
-                                ? isPendingStatus(currentAttempt.status)
-                                  ? 'Replacement in progress'
-                                  : 'Replacement failed'
-                                : 'Current upload attempt'}
-                            </div>
-                            <span className={`${getStatusPillClass(currentAttempt.status)} rounded-full px-3 py-1 text-xs`}>
-                              {STATUS_LABELS[currentAttempt.status ?? 'queued']}
-                            </span>
-                          </div>
-                          <div className="text-sm">{currentAttempt.title}</div>
-                          <div className="text-xs">
-                            {buildUploadTiming(currentAttempt) || 'Upload status pending'}
-                            {currentAttempt.page_count ? ` · ${currentAttempt.page_count} pages` : ''}
-                          </div>
-                          <div className="text-xs space-y-1">
-                            <div>Filename: {currentAttempt.source_name || '—'}</div>
-                            <div>OCR: {currentAttemptSummary || 'Summary pending'}</div>
-                            {currentAttempt.error_message && (
-                              <div>Error: {currentAttempt.error_message}</div>
-                            )}
-                          </div>
-                          {hasUploadWarnings(currentAttempt) && (
-                            <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-xs">
-                              {currentAttempt.warning_count ? `${currentAttempt.warning_count} extraction warning(s). ` : ''}
-                              Searchable content may be partial until this replacement finishes.
-                            </div>
-                          )}
-                          {currentAttempt.status === 'failed' && (
-                            <button
-                              type="button"
-                              onClick={() => void handleRetryUpload(currentAttempt)}
-                              disabled={retryingUploadId === currentAttempt.id}
-                              className="teacher-button-secondary h-10 rounded-2xl px-4 text-sm font-semibold"
-                            >
-                              {retryingUploadId === currentAttempt.id ? 'Re-queueing…' : 'Retry upload'}
-                            </button>
-                          )}
+                      {pendingAttempt && (
+                        <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-sm flex items-center gap-2">
+                          <RefreshCcw className="h-4 w-4 animate-spin" />
+                          {latest ? 'New version processing…' : 'Processing…'}
                         </div>
                       )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl teacher-button-secondary px-3 py-2 text-sm font-semibold">
-                          <UploadCloud className="h-4 w-4" />
-                          {uploading ? 'Queueing…' : 'Upload PDF'}
-                          <input
-                            type="file"
-                            accept="application/pdf"
-                            className="sr-only"
-                            onChange={(event) => {
-                              const file = event.target.files?.[0] || null;
-                              handleUpload(file, week.week, kind);
-                              event.target.value = '';
-                            }}
-                          />
-                        </label>
-                        <div className="text-xs teacher-muted flex items-center gap-2">
-                          <RefreshCcw className="h-3.5 w-3.5" />
-                          Auto-converts to PNG + embeddings
-                        </div>
-                      </div>
-                      {previous.length > 0 && (
-                        <div className="text-xs teacher-muted space-y-2">
-                          <div>Recent upload history:</div>
-                          <ul className="space-y-2">
-                            {previous.map((entry) => (
-                              <li
-                                key={entry.id}
-                                className="rounded-2xl teacher-panel-subtle px-3 py-2 flex items-center justify-between gap-3"
-                              >
-                                <div className="min-w-0">
-                                  <div className="truncate">{entry.source_name || entry.title}</div>
-                                  <div className="text-[11px]">
-                                    {buildUploadTiming(entry) || formatDate(entry.uploaded_at)}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`${getStatusPillClass(entry.status)} rounded-full px-2.5 py-1 text-[11px]`}>
-                                    {STATUS_LABELS[entry.status ?? 'queued']}
-                                  </span>
-                                  {entry.status === 'failed' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleRetryUpload(entry)}
-                                      disabled={retryingUploadId === entry.id}
-                                      className="teacher-button-secondary rounded-xl px-3 py-1.5 text-[11px] font-semibold"
-                                    >
-                                      {retryingUploadId === entry.id ? 'Retrying…' : 'Retry'}
-                                    </button>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                      {failedAttempt && !pendingAttempt && (
+                        <div className="rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm flex items-center justify-between gap-2">
+                          <span>{latest ? 'Replacement failed' : 'Upload failed'}{failedAttempt.error_message ? ` — ${failedAttempt.error_message}` : ''}</span>
+                          <button
+                            type="button"
+                            onClick={() => void handleRetryUpload(failedAttempt)}
+                            disabled={retryingUploadId === failedAttempt.id}
+                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
+                          >
+                            {retryingUploadId === failedAttempt.id ? 'Retrying…' : 'Retry'}
+                          </button>
                         </div>
                       )}
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl teacher-button-secondary px-3 py-2 text-sm font-semibold self-start">
+                        <UploadCloud className="h-4 w-4" />
+                        {uploading ? 'Uploading…' : `Upload Week ${week.week} ${kind === 'notes' ? 'Notes' : 'Slides'}`}
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="sr-only"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            handleUpload(file, week.week, kind);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
                     </div>
                   );
                 })}
