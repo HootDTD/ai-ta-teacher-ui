@@ -15,6 +15,74 @@
   --warning: #8a6712;
   --danger: #8a2818;
   --font-stack: system-ui, -apple-system, sans-serif;
+  --header-bg: rgba(243, 236, 226, 0.82);
+  --header-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
+  --panel-shadow: 0 16px 32px rgba(0, 0, 0, 0.08);
+  --panel-soft-shadow: 0 12px 24px rgba(0, 0, 0, 0.05);
+  --btn-secondary-bg: rgba(236, 228, 214, 0.7);
+  --btn-secondary-hover-bg: rgba(214, 205, 190, 0.8);
+  --btn-primary-hover: #222;
+  --btn-primary-disabled-color: #ffffff;
+  --alert-bg: rgba(236, 228, 214, 0.78);
+  --alert-danger-border: rgba(138, 40, 24, 0.28);
+  --alert-danger-bg: rgba(138, 40, 24, 0.08);
+  --alert-success-border: rgba(40, 89, 63, 0.28);
+  --alert-success-bg: rgba(40, 89, 63, 0.08);
+  --alert-warning-border: rgba(138, 103, 18, 0.28);
+  --alert-warning-bg: rgba(138, 103, 18, 0.08);
+  --warning-text: #6f520f;
+  --pill-bg: rgba(236, 228, 214, 0.75);
+  --pill-success-border: rgba(40, 89, 63, 0.28);
+  --pill-success-bg: rgba(40, 89, 63, 0.1);
+  --pill-warning-border: rgba(138, 103, 18, 0.28);
+  --pill-warning-bg: rgba(138, 103, 18, 0.12);
+  --pill-danger-border: rgba(138, 40, 24, 0.28);
+  --pill-danger-bg: rgba(138, 40, 24, 0.12);
+  --pill-neutral-border: rgba(30, 26, 21, 0.12);
+  --pill-neutral-bg: rgba(30, 26, 21, 0.06);
+  --code-bg: rgba(30, 26, 21, 0.08);
+}
+
+html.dark {
+  --bg: #1a1915;
+  --bg-soft: #222019;
+  --surface: rgba(42, 40, 36, 0.92);
+  --surface-soft: rgba(42, 40, 36, 0.7);
+  --surface-subtle: rgba(50, 48, 43, 0.55);
+  --text: #e8e4de;
+  --muted: #9b9488;
+  --border: #3d3a34;
+  --accent: #e8e4de;
+  --focus-ring: rgba(232, 228, 222, 0.18);
+  --success: #5dba7d;
+  --warning: #d4a93e;
+  --danger: #e06050;
+  --header-bg: rgba(30, 28, 24, 0.88);
+  --header-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  --panel-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+  --panel-soft-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+  --btn-secondary-bg: rgba(50, 48, 43, 0.7);
+  --btn-secondary-hover-bg: rgba(60, 57, 50, 0.85);
+  --btn-primary-hover: #d6d2cc;
+  --btn-primary-disabled-color: #9b9488;
+  --alert-bg: rgba(42, 40, 36, 0.78);
+  --alert-danger-border: rgba(220, 80, 60, 0.3);
+  --alert-danger-bg: rgba(220, 80, 60, 0.1);
+  --alert-success-border: rgba(93, 186, 125, 0.3);
+  --alert-success-bg: rgba(93, 186, 125, 0.1);
+  --alert-warning-border: rgba(212, 169, 62, 0.3);
+  --alert-warning-bg: rgba(212, 169, 62, 0.1);
+  --warning-text: #d4a93e;
+  --pill-bg: rgba(50, 48, 43, 0.75);
+  --pill-success-border: rgba(93, 186, 125, 0.3);
+  --pill-success-bg: rgba(93, 186, 125, 0.1);
+  --pill-warning-border: rgba(212, 169, 62, 0.3);
+  --pill-warning-bg: rgba(212, 169, 62, 0.12);
+  --pill-danger-border: rgba(220, 80, 60, 0.3);
+  --pill-danger-bg: rgba(220, 80, 60, 0.12);
+  --pill-neutral-border: rgba(232, 228, 222, 0.12);
+  --pill-neutral-bg: rgba(232, 228, 222, 0.06);
+  --code-bg: rgba(255, 255, 255, 0.07);
 }
 
 *,
@@ -27,6 +95,18 @@ html,
 body,
 :root {
   height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease,
+    box-shadow 0.4s ease, fill 0.4s ease, stroke 0.4s ease !important;
 }
 
 body {
@@ -61,8 +141,66 @@ a {
 
 .teacher-header {
   border-color: var(--border);
-  background: rgba(243, 236, 226, 0.82);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
+  background: var(--header-bg);
+  box-shadow: var(--header-shadow);
+}
+
+.header-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.header-menu-trigger:hover {
+  border-color: var(--border);
+  background: var(--btn-secondary-bg);
+}
+
+.header-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+  z-index: 70;
+}
+
+.header-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 140ms ease;
+  white-space: nowrap;
+}
+
+.header-menu-item:last-child {
+  border-bottom: 0;
+}
+
+.header-menu-item:hover {
+  background: var(--btn-secondary-bg);
 }
 
 .teacher-brand,
@@ -71,7 +209,14 @@ a {
   color: var(--accent);
 }
 
-.teacher-brand,
+.teacher-brand {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
 .teacher-section-title {
   letter-spacing: -0.04em;
 }
@@ -89,12 +234,12 @@ a {
 
 .teacher-panel {
   background: var(--surface);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--panel-shadow);
 }
 
 .teacher-panel-soft {
   background: var(--surface);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--panel-soft-shadow);
 }
 
 .teacher-panel-subtle {
@@ -146,80 +291,80 @@ a {
 .teacher-button-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #ffffff;
+  color: var(--bg);
 }
 
 .teacher-button-primary:hover:not(:disabled) {
-  background: #222;
+  background: var(--btn-primary-hover);
 }
 
 .teacher-button-primary:disabled {
   border-color: var(--border);
   background: var(--border);
-  color: #ffffff;
+  color: var(--btn-primary-disabled-color);
   opacity: 1;
 }
 
 .teacher-button-secondary {
-  background: rgba(236, 228, 214, 0.7);
+  background: var(--btn-secondary-bg);
   color: var(--text);
 }
 
 .teacher-button-secondary:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(214, 205, 190, 0.8);
+  background: var(--btn-secondary-hover-bg);
 }
 
 .teacher-alert {
   border: 1px solid var(--border);
-  background: rgba(236, 228, 214, 0.78);
+  background: var(--alert-bg);
 }
 
 .teacher-alert--danger {
-  border-color: rgba(138, 40, 24, 0.28);
-  background: rgba(138, 40, 24, 0.08);
+  border-color: var(--alert-danger-border);
+  background: var(--alert-danger-bg);
   color: var(--danger);
 }
 
 .teacher-alert--success {
-  border-color: rgba(40, 89, 63, 0.28);
-  background: rgba(40, 89, 63, 0.08);
+  border-color: var(--alert-success-border);
+  background: var(--alert-success-bg);
   color: var(--success);
 }
 
 .teacher-alert--warning {
-  border-color: rgba(138, 103, 18, 0.28);
-  background: rgba(138, 103, 18, 0.08);
-  color: #6f520f;
+  border-color: var(--alert-warning-border);
+  background: var(--alert-warning-bg);
+  color: var(--warning-text);
 }
 
 .teacher-pill {
   border: 1px solid var(--border);
-  background: rgba(236, 228, 214, 0.75);
+  background: var(--pill-bg);
   color: var(--text);
 }
 
 .teacher-pill--success {
-  border-color: rgba(40, 89, 63, 0.28);
-  background: rgba(40, 89, 63, 0.1);
+  border-color: var(--pill-success-border);
+  background: var(--pill-success-bg);
   color: var(--success);
 }
 
 .teacher-pill--warning {
-  border-color: rgba(138, 103, 18, 0.28);
-  background: rgba(138, 103, 18, 0.12);
-  color: #6f520f;
+  border-color: var(--pill-warning-border);
+  background: var(--pill-warning-bg);
+  color: var(--warning-text);
 }
 
 .teacher-pill--danger {
-  border-color: rgba(138, 40, 24, 0.28);
-  background: rgba(138, 40, 24, 0.12);
+  border-color: var(--pill-danger-border);
+  background: var(--pill-danger-bg);
   color: var(--danger);
 }
 
 .teacher-pill--neutral {
-  border-color: rgba(30, 26, 21, 0.12);
-  background: rgba(30, 26, 21, 0.06);
+  border-color: var(--pill-neutral-border);
+  background: var(--pill-neutral-bg);
   color: var(--muted);
 }
 
@@ -263,13 +408,13 @@ a {
 }
 
 .teacher-prose code {
-  background: rgba(30, 26, 21, 0.08);
+  background: var(--code-bg);
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
 }
 
 .teacher-prose pre {
-  background: rgba(30, 26, 21, 0.08);
+  background: var(--code-bg);
   padding: 0.95rem;
   border-radius: 0.75rem;
   overflow: auto;

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Calendar, RefreshCcw, UploadCloud } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, ClipboardCopy, Link2, RefreshCcw, Trash2, UploadCloud, Sun, Moon, MoreVertical } from 'lucide-react';
 import {
   SUPABASE_AUTH_ENABLED,
   clearStoredSession,
@@ -86,6 +86,18 @@ type RetrievalWeightResponse = {
   };
 };
 
+type InviteLink = {
+  id: number;
+  code: string;
+  search_space_id: number;
+  role: 'student' | 'teacher';
+  is_active: boolean;
+  max_uses: number | null;
+  use_count: number;
+  expires_at: string | null;
+  created_at: string;
+};
+
 const MAX_WEEKS = 16;
 const POLL_INTERVAL_MS = 4000;
 
@@ -121,6 +133,40 @@ export default function TeacherConsole() {
   const [weightBounds, setWeightBounds] = useState<{ min: number; max: number } | null>(null);
   const [loadingWeights, setLoadingWeights] = useState<boolean>(true);
   const [savingWeights, setSavingWeights] = useState<boolean>(false);
+  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
+  const [loadingInvites, setLoadingInvites] = useState<boolean>(false);
+  const [generatingInvite, setGeneratingInvite] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = stored ? stored === 'dark' : prefersDark;
+    setDarkMode(isDark);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setHeaderMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    document.documentElement.classList.add('theme-transition');
+    setDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+    setTimeout(() => document.documentElement.classList.remove('theme-transition'), 450);
+  };
   const accessToken = session?.access_token || '';
   const userLabel = session?.user_email || session?.user_id || 'Signed in';
 
@@ -313,6 +359,105 @@ export default function TeacherConsole() {
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [accessToken, selectedClassId, hasPendingUploads, fetchWeeks]);
+
+  const fetchInviteLinks = useCallback(async (searchSpaceId: number, silent = false) => {
+    if (!accessToken || !Number.isFinite(searchSpaceId) || searchSpaceId <= 0) return;
+    if (!silent) setLoadingInvites(true);
+    try {
+      const resp = await fetch(`/api/invite-links?search_space_id=${searchSpaceId}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to load invite links');
+      }
+      const data = (await resp.json()) as InviteLink[];
+      setInviteLinks(Array.isArray(data) ? data : []);
+    } catch {
+      setInviteLinks([]);
+    } finally {
+      setLoadingInvites(false);
+    }
+  }, [accessToken]);
+
+  const handleGenerateInvite = async (role: 'student' | 'teacher') => {
+    if (!accessToken || !selectedClassId) return;
+    setGeneratingInvite(role);
+    setError(null);
+    try {
+      const resp = await fetch('/api/invite-links', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ search_space_id: selectedClassId, role }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to generate invite link');
+      }
+      await fetchInviteLinks(selectedClassId, true);
+      setFlash(`${role === 'student' ? 'Student' : 'Teacher'} invite link generated.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate invite link';
+      setError(msg);
+    } finally {
+      setGeneratingInvite(null);
+    }
+  };
+
+  const handleRevokeInvite = async (linkId: number) => {
+    if (!accessToken) return;
+    setError(null);
+    try {
+      const resp = await fetch(`/api/invite-links/${linkId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (resp.status !== 204 && !resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to revoke invite link');
+      }
+      if (selectedClassId) await fetchInviteLinks(selectedClassId, true);
+      setFlash('Invite link revoked.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to revoke invite link';
+      setError(msg);
+    }
+  };
+
+  const handleCopyInvite = async (code: string, role: 'student' | 'teacher') => {
+    const baseUrl = role === 'student'
+      ? (process.env.NEXT_PUBLIC_STUDENT_APP_URL || window.location.origin)
+      : window.location.origin;
+    const url = `${baseUrl}/join/${code}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+  };
+
+  useEffect(() => {
+    if (!authReady || !accessToken || !selectedClassId) {
+      setInviteLinks([]);
+      return;
+    }
+    void fetchInviteLinks(selectedClassId);
+  }, [authReady, accessToken, selectedClassId, fetchInviteLinks]);
+
+  const activeStudentLink = useMemo(
+    () => inviteLinks.find((l) => l.role === 'student' && l.is_active) ?? null,
+    [inviteLinks],
+  );
+  const activeTeacherLink = useMemo(
+    () => inviteLinks.find((l) => l.role === 'teacher' && l.is_active) ?? null,
+    [inviteLinks],
+  );
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -623,18 +768,43 @@ export default function TeacherConsole() {
     <div className="min-h-screen teacher-shell flex flex-col">
       <header className="teacher-header border-b sticky top-0 backdrop-blur">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
-          <div className="teacher-brand font-semibold tracking-tight">Hoot | Teacher Console</div>
-          <div className="flex items-center gap-3">
-            <div className="text-xs teacher-muted hidden lg:block max-w-[220px] truncate" title={userLabel}>
-              {userLabel}
-            </div>
+          <div className="teacher-brand">Hoot | Teacher Console</div>
+          <div ref={headerMenuRef} className="relative">
             <button
+              onClick={() => setHeaderMenuOpen((prev) => !prev)}
+              className="header-menu-trigger"
               type="button"
-              onClick={handleSignOut}
-              className="teacher-button-secondary px-3 py-1.5 rounded-md text-sm transition-colors"
+              aria-label="Menu"
             >
-              Sign out
+              <MoreVertical className="h-4 w-4" />
             </button>
+            <AnimatePresence>
+              {headerMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  className="header-menu"
+                >
+                  <button
+                    onClick={toggleTheme}
+                    className="header-menu-item"
+                    type="button"
+                  >
+                    {darkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                    {darkMode ? 'Light mode' : 'Dark mode'}
+                  </button>
+                  <button
+                    onClick={() => { handleSignOut(); setHeaderMenuOpen(false); }}
+                    className="header-menu-item"
+                    type="button"
+                  >
+                    Sign out of {userLabel}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
@@ -693,6 +863,79 @@ export default function TeacherConsole() {
             </div>
           </div>
         </div>
+
+        {selectedClassId && (
+          <div className="rounded-3xl teacher-panel-soft p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 teacher-muted" />
+              <h2 className="text-lg font-semibold teacher-section-title">Invite Links</h2>
+            </div>
+            {loadingInvites ? (
+              <div className="text-sm teacher-muted">Loading invite links…</div>
+            ) : (
+              <div className="space-y-3">
+                {(['student', 'teacher'] as const).map((role) => {
+                  const activeLink = role === 'student' ? activeStudentLink : activeTeacherLink;
+                  const generating = generatingInvite === role;
+                  return (
+                    <div key={role} className="rounded-2xl teacher-panel-subtle p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold teacher-section-title capitalize">{role} Invite</span>
+                        {activeLink && (
+                          <span className="text-xs teacher-muted">
+                            {activeLink.use_count} use{activeLink.use_count !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                      {activeLink ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <code className="flex-1 min-w-0 truncate text-xs teacher-muted bg-black/5 dark:bg-white/5 rounded-lg px-2 py-1.5">
+                            {window.location.origin}/join/{activeLink.code}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyInvite(activeLink.code, role)}
+                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
+                          >
+                            <ClipboardCopy className="h-3.5 w-3.5" />
+                            {copiedCode === activeLink.code ? 'Copied!' : 'Copy'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleGenerateInvite(role)}
+                            disabled={generating}
+                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            {generating ? 'Generating…' : 'Regenerate'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRevokeInvite(activeLink.id)}
+                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1 text-red-500"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Revoke
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleGenerateInvite(role)}
+                          disabled={generating}
+                          className="teacher-button-primary rounded-xl px-4 py-2 text-sm font-semibold inline-flex items-center gap-1.5"
+                        >
+                          <Link2 className="h-4 w-4" />
+                          {generating ? 'Generating…' : `Generate ${role} invite link`}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="rounded-2xl teacher-alert teacher-alert--danger px-4 py-3 text-sm">
