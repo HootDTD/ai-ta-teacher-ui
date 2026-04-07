@@ -271,7 +271,9 @@ export default function TeacherConsole() {
       });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || 'Failed to load weekly uploads');
+        let msg = 'Failed to load weekly uploads';
+        try { const j = JSON.parse(text); if (j.detail) msg = j.detail; } catch { if (text) msg = text; }
+        throw new Error(msg);
       }
       const data = (await resp.json()) as CourseState;
       setCourseState((previous) => {
@@ -301,7 +303,9 @@ export default function TeacherConsole() {
       });
       if (!resp.ok) {
         const text = await resp.text();
-        throw new Error(text || 'Failed to load retrieval weights');
+        let msg = 'Failed to load retrieval weights';
+        try { const j = JSON.parse(text); if (j.detail) msg = j.detail; } catch { if (text) msg = text; }
+        throw new Error(msg);
       }
       const data = (await resp.json()) as RetrievalWeightResponse;
       setWeights(data.weights);
@@ -910,42 +914,44 @@ export default function TeacherConsole() {
               )}
             </div>
 
-            <div className="flex flex-col">
-              <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Current Week</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={MAX_WEEKS}
-                  value={pendingWeek}
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
-                    if (Number.isNaN(value)) {
-                      setPendingWeek(1);
-                      return;
-                    }
-                    const clamped = Math.min(MAX_WEEKS, Math.max(1, value));
-                    setPendingWeek(clamped);
-                  }}
-                  className="teacher-input h-10 w-16 rounded-2xl px-2 text-center text-sm"
-                />
-                <button
-                  onClick={handleCurrentWeekSave}
-                  disabled={savingWeek || !courseState || pendingWeek === courseState.current_week}
-                  className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold"
-                >
-                  {savingWeek ? 'Saving…' : 'Update'}
-                </button>
+            {selectedClassId && !showCreateClass && (
+              <div className="flex flex-col">
+                <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Current Week</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_WEEKS}
+                    value={pendingWeek}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      if (Number.isNaN(value)) {
+                        setPendingWeek(1);
+                        return;
+                      }
+                      const clamped = Math.min(MAX_WEEKS, Math.max(1, value));
+                      setPendingWeek(clamped);
+                    }}
+                    className="teacher-input h-10 w-16 rounded-2xl px-2 text-center text-sm"
+                  />
+                  <button
+                    onClick={handleCurrentWeekSave}
+                    disabled={savingWeek || !courseState || pendingWeek === courseState.current_week}
+                    className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold"
+                  >
+                    {savingWeek ? 'Saving…' : 'Update'}
+                  </button>
+                </div>
+                <p className="text-xs teacher-muted flex items-center gap-1.5 mt-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Students see uploads through the active week.
+                </p>
               </div>
-              <p className="text-xs teacher-muted flex items-center gap-1.5 mt-1">
-                <Calendar className="h-3.5 w-3.5" />
-                Students see uploads through the active week.
-              </p>
-            </div>
+            )}
           </div>
         </div>
 
-        {selectedClassId && (
+        {selectedClassId && !showCreateClass && (
           <div className="rounded-3xl teacher-panel-soft p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Link2 className="h-5 w-5 teacher-muted" />
