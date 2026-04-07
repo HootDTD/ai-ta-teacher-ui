@@ -119,6 +119,9 @@ export default function TeacherConsole() {
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [loadingClasses, setLoadingClasses] = useState<boolean>(true);
+  const [showCreateClass, setShowCreateClass] = useState(false);
+  const [newClassName, setNewClassName] = useState('');
+  const [creatingClass, setCreatingClass] = useState(false);
   const [courseState, setCourseState] = useState<CourseState | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +221,7 @@ export default function TeacherConsole() {
     setLoadingClasses(true);
     setError(null);
     try {
-      const resp = await fetch('/api/classes', {
+      const resp = await fetch('/api/my-classes', {
         cache: 'no-store',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -227,16 +230,18 @@ export default function TeacherConsole() {
         throw new Error(text || 'Failed to load classes');
       }
       const data = (await resp.json()) as ClassOption[];
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('No classes are available for this account.');
+      setClassOptions(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setSelectedClassId((previous) => {
+          if (previous && data.some((option) => option.id === previous)) {
+            return previous;
+          }
+          return data[0].id;
+        });
+      } else {
+        setSelectedClassId(null);
+        setShowCreateClass(true);
       }
-      setClassOptions(data);
-      setSelectedClassId((previous) => {
-        if (previous && data.some((option) => option.id === previous)) {
-          return previous;
-        }
-        return data[0].id;
-      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load classes';
       setError(msg);
@@ -443,6 +448,38 @@ export default function TeacherConsole() {
       setTimeout(() => setCopiedCode(null), 2000);
     } catch {
       setError('Failed to copy to clipboard');
+    }
+  };
+
+  const handleCreateClass = async () => {
+    const name = newClassName.trim();
+    if (!name || !accessToken) return;
+    setCreatingClass(true);
+    setError(null);
+    try {
+      const resp = await fetch('/api/classes', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Failed to create class');
+      }
+      const created = (await resp.json()) as ClassOption;
+      setClassOptions((prev) => [...prev, created]);
+      setSelectedClassId(created.id);
+      setShowCreateClass(false);
+      setNewClassName('');
+      setFlash(`Class "${created.name}" created.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to create class';
+      setError(msg);
+    } finally {
+      setCreatingClass(false);
     }
   };
 
@@ -818,19 +855,59 @@ export default function TeacherConsole() {
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
             <div className="flex flex-col">
               <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Class</span>
-              <select
-                value={selectedClassId ?? ''}
-                onChange={(e) => setSelectedClassId(Number(e.target.value))}
-                disabled={loadingClasses || classOptions.length === 0}
-                className="teacher-input h-10 rounded-2xl px-3 text-sm"
-              >
-                {classOptions.length === 0 && <option value="">No classes available</option>}
-                {classOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
+              {showCreateClass ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Class name (e.g. Fluid Mechanics)"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateClass(); }}
+                    className="teacher-input h-10 rounded-2xl px-3 text-sm flex-1"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateClass()}
+                    disabled={creatingClass || !newClassName.trim()}
+                    className="teacher-button-primary rounded-2xl px-4 h-10 text-sm font-semibold whitespace-nowrap"
+                  >
+                    {creatingClass ? 'Creating...' : 'Create'}
+                  </button>
+                  {classOptions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateClass(false)}
+                      className="teacher-button-secondary rounded-2xl px-3 h-10 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedClassId ?? ''}
+                    onChange={(e) => setSelectedClassId(Number(e.target.value))}
+                    disabled={loadingClasses || classOptions.length === 0}
+                    className="teacher-input h-10 rounded-2xl px-3 text-sm flex-1"
+                  >
+                    {classOptions.length === 0 && <option value="">No classes yet</option>}
+                    {classOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateClass(true)}
+                    className="teacher-button-secondary rounded-2xl px-3 h-10 text-sm font-semibold whitespace-nowrap"
+                  >
+                    + New Class
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col">
