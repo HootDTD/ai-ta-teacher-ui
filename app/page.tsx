@@ -428,11 +428,15 @@ export default function TeacherConsole() {
     }
   };
 
+  const studentAppUrl = process.env.NEXT_PUBLIC_STUDENT_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+
+  const getInviteUrl = (code: string, role: 'student' | 'teacher') => {
+    const baseUrl = role === 'student' ? studentAppUrl : (typeof window !== 'undefined' ? window.location.origin : '');
+    return `${baseUrl}/join/${code}`;
+  };
+
   const handleCopyInvite = async (code: string, role: 'student' | 'teacher') => {
-    const baseUrl = role === 'student'
-      ? (process.env.NEXT_PUBLIC_STUDENT_APP_URL || window.location.origin)
-      : window.location.origin;
-    const url = `${baseUrl}/join/${code}`;
+    const url = getInviteUrl(code, role);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedCode(code);
@@ -890,7 +894,7 @@ export default function TeacherConsole() {
                       {activeLink ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <code className="flex-1 min-w-0 truncate text-xs teacher-muted bg-black/5 dark:bg-white/5 rounded-lg px-2 py-1.5">
-                            {window.location.origin}/join/{activeLink.code}
+                            {getInviteUrl(activeLink.code, role)}
                           </code>
                           <button
                             type="button"
