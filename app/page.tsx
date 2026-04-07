@@ -439,9 +439,8 @@ export default function TeacherConsole() {
 
   const studentAppUrl = process.env.NEXT_PUBLIC_STUDENT_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
-  const getInviteUrl = (code: string, role: 'student' | 'teacher') => {
-    const baseUrl = role === 'student' ? studentAppUrl : (typeof window !== 'undefined' ? window.location.origin : '');
-    return `${baseUrl}/join/${code}`;
+  const getInviteUrl = (code: string, _role: 'student' | 'teacher') => {
+    return `${studentAppUrl}/join/${code}`;
   };
 
   const handleCopyInvite = async (code: string, role: 'student' | 'teacher') => {
