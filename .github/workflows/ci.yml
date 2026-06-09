@@ -1,10 +1,27 @@
+# CI for the teacher UI (Next.js).
+#
+# `ci-passed` is the aggregation job — the single status to require in branch
+# protection and for Railway's "Wait for CI" deploy gate. Add test jobs later
+# (vitest/playwright) by listing them in its `needs` — the required-check name
+# stays stable.
+#
+# Branch model: main = production line (Railway prod), staging = integration
+# (Railway staging).
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
-    branches: [main]
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -18,3 +35,14 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  ci-passed:
+    name: ci-passed
+    if: always()
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert required jobs passed
+        run: |
+          echo "build=${{ needs.build.result }}"
+          test "${{ needs.build.result }}" = "success"
