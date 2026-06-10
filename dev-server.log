@@ -1,0 +1,21 @@
+
+> teacher-ai-ta-ui@0.1.0 dev
+> next dev --turbopack -p 3002
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\ultra\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\ultra\OneDrive\TA-test\ai-ta-teacher-ui\package-lock.json
+
+   ▲ Next.js 15.5.12 (Turbopack)
+   - Local:        http://localhost:3002
+   - Network:      http://10.17.216.121:3002
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 2s
+ ○ Compiling / ...
+ ✓ Compiled / in 4.8s
+ GET / 200 in 5456ms
