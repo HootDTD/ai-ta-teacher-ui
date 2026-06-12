@@ -20,6 +20,7 @@ const WEEK_KINDS = {
 } as const;
 
 const RESOURCE_WEIGHT_LABELS = {
+  textbook: 'Textbook',
   slides: 'Slides',
   notes: 'Notes',
 } as const;
@@ -38,7 +39,7 @@ type ClassOption = {
 type UploadSummary = {
   id: string;
   week: number;
-  kind: WeekKind;
+  kind: WeekKind | 'textbook';
   title: string;
   status?: UploadStatus;
   uploaded_at?: string;
@@ -71,6 +72,8 @@ type CourseState = {
   slug: string;
   current_week: number;
   weeks: WeekState[];
+  // Course-wide textbook (not pinned to a week). Always present from the API.
+  textbook: SectionState;
 };
 
 type RetrievalWeights = Record<WeightKind, number>;
@@ -641,6 +644,42 @@ export default function TeacherConsole() {
     }
   };
 
+  const handleUploadTextbook = async (file: File | null) => {
+    if (!accessToken) {
+      setError('Sign in is required.');
+      return;
+    }
+    if (!file || !selectedClassId) return;
+    setUploadingKey('textbook');
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('search_space_id', String(selectedClassId));
+      // Course-wide material: week is ignored by the backend (forced to the
+      // course-wide sentinel), but the field is required by the endpoint.
+      formData.append('week', '0');
+      formData.append('kind', 'textbook');
+      formData.append('title', file.name.replace(/\.pdf$/i, '').trim() || 'Textbook');
+      formData.append('file', file);
+      const resp = await fetch('/api/teacher/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || 'Upload failed');
+      }
+      await fetchWeeks(selectedClassId, { background: true });
+      setFlash('Textbook queued for processing.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setError(msg);
+    } finally {
+      setUploadingKey(null);
+    }
+  };
+
   const handleRetryUpload = async (upload: UploadSummary) => {
     if (!accessToken) {
       setError('Sign in is required.');
@@ -660,7 +699,11 @@ export default function TeacherConsole() {
       if (selectedClassId) {
         await fetchWeeks(selectedClassId, { background: true });
       }
-      setFlash(`${WEEK_KINDS[upload.kind]} for week ${upload.week} re-queued.`);
+      if (upload.kind === 'textbook') {
+        setFlash('Textbook re-queued.');
+      } else {
+        setFlash(`${WEEK_KINDS[upload.kind]} for week ${upload.week} re-queued.`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Retry failed';
       setError(msg);
@@ -1119,6 +1162,70 @@ export default function TeacherConsole() {
             </div>
           )}
         </div>
+
+        {courseState && (() => {
+          const section = courseState.textbook ?? { latest: null, history: [] };
+          const latest = section.latest;
+          const uploading = uploadingKey === 'textbook';
+          const pendingAttempt =
+            section.history.find((entry) => entry.id !== latest?.id && isPendingStatus(entry.status)) ?? null;
+          const failedAttempt =
+            section.history.find((entry) => entry.id !== latest?.id && entry.status === 'failed') ??
+            (!latest ? section.history.find((entry) => entry.status === 'failed') ?? null : null);
+          return (
+            <div className="rounded-3xl teacher-panel-soft p-5">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold teacher-section-title">Course textbook</div>
+                <span className="rounded-full teacher-pill px-3 py-1 text-xs">All weeks</span>
+              </div>
+              <p className="mt-1 text-sm teacher-muted">
+                The textbook is searched for every question in this course, regardless of the active week.
+              </p>
+              <div className="mt-4 rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
+                {latest ? (
+                  <div className="text-sm teacher-muted">
+                    {latest.source_name || latest.title} · {latest.page_count ? `${latest.page_count} pages` : 'Processing'}
+                  </div>
+                ) : (
+                  <div className="text-sm teacher-muted">No textbook uploaded yet.</div>
+                )}
+                {pendingAttempt && (
+                  <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-sm flex items-center gap-2">
+                    <RefreshCcw className="h-4 w-4 animate-spin" />
+                    {latest ? 'New textbook processing…' : 'Processing…'}
+                  </div>
+                )}
+                {failedAttempt && !pendingAttempt && (
+                  <div className="rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm flex items-center justify-between gap-2">
+                    <span>{latest ? 'Replacement failed' : 'Upload failed'}{failedAttempt.error_message ? ` — ${failedAttempt.error_message}` : ''}</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleRetryUpload(failedAttempt)}
+                      disabled={retryingUploadId === failedAttempt.id}
+                      className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
+                    >
+                      {retryingUploadId === failedAttempt.id ? 'Retrying…' : 'Retry'}
+                    </button>
+                  </div>
+                )}
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl teacher-button-secondary px-3 py-2 text-sm font-semibold self-start">
+                  <UploadCloud className="h-4 w-4" />
+                  {uploading ? 'Uploading…' : latest ? 'Replace textbook' : 'Upload textbook'}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      void handleUploadTextbook(file);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })()}
 
         {loading && (
           <div className="rounded-2xl teacher-panel-soft px-4 py-6 text-sm teacher-muted flex items-center gap-3">
