@@ -1,5 +1,14 @@
 import type { Metadata } from "next";
+import { Fraunces } from "next/font/google";
 import "./globals.css";
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+  axes: ["opsz"],
+  variable: "--font-fraunces",
+});
 
 export const metadata: Metadata = {
   title: "Hoot Teacher Console",
@@ -12,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={fraunces.variable}>
       <body className="antialiased">
         {children}
       </body>
