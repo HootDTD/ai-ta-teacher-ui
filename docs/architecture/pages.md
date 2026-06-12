@@ -10,7 +10,7 @@ related:
   - ai-ta-teacher-ui/_overview
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-06-11
+last_verified: 2026-06-12
 stub: false
 ---
 
@@ -20,8 +20,8 @@ Three UI routes (all `"use client"` single-file pages, no shared components) plu
 
 | Route | File | Purpose |
 |-------|------|---------|
-| `/` | `app/page.tsx` (~1250 lines, `TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, a course-wide textbook card, and weekly notes/slides PDF uploads with status polling. |
-| `/join/[code]` | `app/join/[code]/page.tsx` (`JoinPage`) | Teacher invite redemption: resolve code → auth → auto-redeem → redirect to `/`. |
+| `/` | `app/page.tsx` (~1250 lines, `TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, a course-wide textbook card, and weekly notes/slides PDF uploads with status polling. Entry states (auth bootstrap, sign-in card, config error) use the shared `.auth-screen`/`.auth-card`/`.boot-screen` design (owl video + Fraunces "Hoot" wordmark, loaded via `next/font` in `app/layout.tsx`); inline loading rows show a `boot-screen__bar` shimmer. |
+| `/join/[code]` | `app/join/[code]/page.tsx` (`JoinPage`) | Teacher invite redemption: resolve code → auth → auto-redeem → redirect to `/`. All branches render on the shared entry-screen design; the brand subtitle is role-aware (`student` invites show "AI Teaching Assistant"). |
 | `/report/[id]` | `app/report/[id]/page.tsx` (`ReportPage`) | AI-use report viewer: markdown render + copy / .md / .json / PDF export. |
 
 All `app/api/**` files are thin pass-through proxies (`export const runtime = 'nodejs'`) that read `process.env.AI_TA_API_BASE_URL`, forward the incoming `Authorization` header and body, and return the backend response with `Cache-Control: no-store` (500 `"AI_TA_API_BASE_URL missing"` if the env var is unset; dynamic params are Next 15 style `Promise` ctx params).

@@ -180,8 +180,9 @@ export default function TeacherConsole() {
     let cancelled = false;
     (async () => {
       if (!SUPABASE_AUTH_ENABLED) {
+        console.error('Auth is not configured: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.');
         if (!cancelled) {
-          setAuthError('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be configured.');
+          setAuthError("Hoot isn't fully set up yet. Please contact your administrator.");
           setSession(null);
           setAuthReady(true);
         }
@@ -775,17 +776,28 @@ export default function TeacherConsole() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen teacher-shell flex items-center justify-center px-4">
-        <div className="text-sm teacher-muted">Checking authentication…</div>
+      <div className="auth-screen">
+        <div className="boot-screen">
+          <video src="/thinking.mp4" autoPlay loop muted playsInline className="boot-screen__owl" aria-hidden />
+          <div className="boot-screen__wordmark">Hoot</div>
+          <div className="boot-screen__bar" />
+        </div>
       </div>
     );
   }
 
   if (!SUPABASE_AUTH_ENABLED) {
     return (
-      <div className="min-h-screen teacher-shell flex items-center justify-center px-4">
-        <div className="max-w-md rounded-2xl teacher-alert teacher-alert--danger p-4 text-sm">
-          Supabase auth is not configured. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+      <div className="auth-screen">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <video src="/thinking.mp4" autoPlay loop muted playsInline className="auth-brand__owl" aria-hidden />
+            <div className="auth-brand__wordmark">Hoot</div>
+            <div className="auth-brand__subtitle">Teacher Console</div>
+          </div>
+          <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">
+            Hoot isn&apos;t fully set up yet. Please contact your administrator.
+          </div>
         </div>
       </div>
     );
@@ -793,24 +805,18 @@ export default function TeacherConsole() {
 
   if (!session) {
     return (
-      <div className="min-h-screen teacher-shell flex items-center justify-center px-4">
-        <form
-          onSubmit={handleSignIn}
-          className="w-full max-w-sm rounded-2xl teacher-panel p-5 space-y-4"
-        >
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight teacher-section-title">Teacher sign in</h1>
-            <p className="mt-1 text-sm teacher-muted">Use your Supabase account with teacher membership.</p>
+      <div className="auth-screen">
+        <form onSubmit={handleSignIn} className="auth-card">
+          <div className="auth-brand">
+            <video src="/thinking.mp4" autoPlay loop muted playsInline className="auth-brand__owl" aria-hidden />
+            <div className="auth-brand__wordmark">Hoot</div>
+            <div className="auth-brand__subtitle">Teacher Console</div>
           </div>
           {authError && (
-            <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-2 text-sm">
-              {authError}
-            </div>
+            <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">{authError}</div>
           )}
           {authNotice && (
-            <div className="rounded-xl teacher-alert teacher-alert--success px-3 py-2 text-sm">
-              {authNotice}
-            </div>
+            <div className="teacher-alert teacher-alert--success px-3 py-2 text-sm">{authNotice}</div>
           )}
           <label className="block text-sm teacher-muted">
             Email
@@ -819,7 +825,7 @@ export default function TeacherConsole() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="teacher-input mt-1 h-10 w-full rounded-xl px-3 outline-none"
+              className="teacher-input mt-1 h-10 w-full px-3 outline-none"
             />
           </label>
           <label className="block text-sm teacher-muted">
@@ -829,13 +835,13 @@ export default function TeacherConsole() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              className="teacher-input mt-1 h-10 w-full rounded-xl px-3 outline-none"
+              className="teacher-input mt-1 h-10 w-full px-3 outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={authLoading}
-            className="teacher-button-primary h-10 w-full rounded-xl text-sm font-semibold"
+            className="teacher-button-primary h-10 w-full text-sm font-semibold"
           >
             {authLoading ? 'Signing in…' : 'Sign in'}
           </button>
@@ -843,9 +849,9 @@ export default function TeacherConsole() {
             type="button"
             disabled={authLoading}
             onClick={handleSignUp}
-            className="teacher-button-secondary h-10 w-full rounded-xl text-sm font-semibold"
+            className="auth-link-button"
           >
-            {authLoading ? 'Working…' : 'Create account'}
+            {authLoading ? 'Working…' : 'New here? Create an account'}
           </button>
         </form>
       </div>
@@ -1001,7 +1007,10 @@ export default function TeacherConsole() {
               <h2 className="text-lg font-semibold teacher-section-title">Invite Links</h2>
             </div>
             {loadingInvites ? (
-              <div className="text-sm teacher-muted">Loading invite links…</div>
+              <div className="text-sm teacher-muted flex items-center gap-3">
+                <span className="boot-screen__bar" />
+                Loading invite links…
+              </div>
             ) : (
               <div className="space-y-3">
                 {(['student', 'teacher'] as const).map((role) => {
@@ -1092,7 +1101,10 @@ export default function TeacherConsole() {
             </p>
           </div>
           {loadingWeights && (
-            <div className="rounded-2xl teacher-panel-subtle px-4 py-4 text-sm teacher-muted">Loading weights…</div>
+            <div className="rounded-2xl teacher-panel-subtle px-4 py-4 text-sm teacher-muted flex items-center gap-3">
+              <span className="boot-screen__bar" />
+              Loading weights…
+            </div>
           )}
           {!loadingWeights && weights && (
             <>
@@ -1216,7 +1228,8 @@ export default function TeacherConsole() {
         })()}
 
         {loading && (
-          <div className="rounded-2xl teacher-panel-soft px-4 py-6 text-sm teacher-muted">
+          <div className="rounded-2xl teacher-panel-soft px-4 py-6 text-sm teacher-muted flex items-center gap-3">
+            <span className="boot-screen__bar" />
             Loading weekly timeline…
           </div>
         )}

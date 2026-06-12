@@ -43,7 +43,6 @@ export default function JoinPage() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
-  const [redeemLoading, setRedeemLoading] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState(false);
 
@@ -86,7 +85,6 @@ export default function JoinPage() {
   const redeem = useCallback(
     async (token: string) => {
       if (!code || redeemSuccess) return;
-      setRedeemLoading(true);
       setRedeemError(null);
       try {
         const resp = await fetch(`/api/invite-links/redeem/${encodeURIComponent(code)}`, {
@@ -106,8 +104,6 @@ export default function JoinPage() {
         }
       } catch (err) {
         setRedeemError(err instanceof Error ? err.message : "Failed to redeem invite code");
-      } finally {
-        setRedeemLoading(false);
       }
     },
     [code, redeemSuccess, router]
@@ -154,12 +150,22 @@ export default function JoinPage() {
     }
   };
 
+  const brand = (
+    <div className="auth-brand">
+      <video src="/thinking.mp4" autoPlay loop muted playsInline className="auth-brand__owl" aria-hidden />
+      <div className="auth-brand__wordmark">Hoot</div>
+      <div className="auth-brand__subtitle">{resolved?.role === 'student' ? 'AI Teaching Assistant' : 'Teacher Console'}</div>
+    </div>
+  );
+
   if (!SUPABASE_AUTH_ENABLED) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="module w-full max-w-sm">
-          <h1 className="text-lg font-semibold">Auth not configured</h1>
-          <p className="text-sm text-gray-500">Supabase auth is not enabled.</p>
+      <div className="auth-screen">
+        <div className="auth-card">
+          {brand}
+          <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">
+            Hoot isn&apos;t fully set up yet. Please contact your administrator.
+          </div>
         </div>
       </div>
     );
@@ -167,19 +173,29 @@ export default function JoinPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <p className="text-sm text-gray-500">Checking invite code...</p>
+      <div className="auth-screen">
+        <div className="boot-screen">
+          <video src="/thinking.mp4" autoPlay loop muted playsInline className="boot-screen__owl" aria-hidden />
+          <div className="boot-screen__wordmark">Hoot</div>
+          <div className="boot-screen__bar" />
+          <div className="boot-screen__label">Checking your invite…</div>
+        </div>
       </div>
     );
   }
 
   if (resolveError) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm space-y-3">
-          <h1 className="text-lg font-semibold">Invalid Invite Link</h1>
-          <p className="text-sm text-red-400">{resolveError}</p>
-          <p className="text-sm text-gray-500">Ask the course owner for a valid invite code.</p>
+      <div className="auth-screen">
+        <div className="auth-card">
+          {brand}
+          <h1 className="text-lg font-semibold teacher-section-title" style={{ textAlign: 'center', margin: 0 }}>
+            Invalid invite link
+          </h1>
+          <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">{resolveError}</div>
+          <p className="text-sm teacher-muted" style={{ textAlign: 'center', margin: 0 }}>
+            Ask the course owner for a valid invite link.
+          </p>
         </div>
       </div>
     );
@@ -187,13 +203,18 @@ export default function JoinPage() {
 
   if (redeemSuccess && resolved) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center space-y-2">
-          <h1 className="text-lg font-semibold">You&apos;re in!</h1>
-          <p className="text-sm text-gray-400">
+      <div className="auth-screen">
+        <div className="auth-card">
+          {brand}
+          <h1 className="text-lg font-semibold teacher-section-title" style={{ textAlign: 'center', margin: 0 }}>
+            You&apos;re in!
+          </h1>
+          <p className="text-sm teacher-muted" style={{ textAlign: 'center', margin: 0 }}>
             Joined <strong>{resolved.course_name}</strong> as {resolved.role}.
           </p>
-          <p className="text-sm text-gray-500">Redirecting to Teacher Console...</p>
+          <p className="text-sm teacher-muted" style={{ textAlign: 'center', margin: 0 }}>
+            Redirecting to the Teacher Console…
+          </p>
         </div>
       </div>
     );
@@ -201,62 +222,81 @@ export default function JoinPage() {
 
   if (!session && authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <form onSubmit={handleSignIn} className="w-full max-w-sm space-y-4">
-          <div>
-            <h1 className="text-lg font-semibold">Join {resolved?.course_name} as Teacher</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Sign in or create an account to join this course.
-            </p>
-          </div>
-          {authError && <p className="text-sm text-red-400">{authError}</p>}
-          {authNotice && <p className="text-sm text-yellow-400">{authNotice}</p>}
-          <label className="block text-sm">
+      <div className="auth-screen">
+        <form onSubmit={handleSignIn} className="auth-card">
+          {brand}
+          <h1 className="text-lg font-semibold teacher-section-title" style={{ textAlign: 'center', margin: 0 }}>
+            Join {resolved?.course_name ?? 'this course'}
+          </h1>
+          <p className="text-sm teacher-muted" style={{ textAlign: 'center', margin: 0 }}>
+            Sign in or create an account to join this course.
+          </p>
+          {authError && (
+            <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">{authError}</div>
+          )}
+          {authNotice && (
+            <div className="teacher-alert teacher-alert--success px-3 py-2 text-sm">{authNotice}</div>
+          )}
+          <label className="block text-sm teacher-muted">
             Email
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="mt-1 w-full rounded-xl border border-gray-600 bg-transparent px-3 py-2 text-sm"
+              className="teacher-input mt-1 h-10 w-full px-3 outline-none"
             />
           </label>
-          <label className="block text-sm">
+          <label className="block text-sm teacher-muted">
             Password
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              className="mt-1 w-full rounded-xl border border-gray-600 bg-transparent px-3 py-2 text-sm"
+              className="teacher-input mt-1 h-10 w-full px-3 outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={authLoading}
-            className="w-full rounded-xl bg-white text-black py-2 text-sm font-semibold"
+            className="teacher-button-primary h-10 w-full text-sm font-semibold"
           >
-            {authLoading ? "Signing in..." : "Sign in"}
+            {authLoading ? 'Signing in…' : 'Sign in'}
           </button>
           <button
             type="button"
             disabled={authLoading}
             onClick={handleSignUp}
-            className="w-full rounded-xl border border-gray-600 py-2 text-sm font-semibold"
+            className="auth-link-button"
           >
-            {authLoading ? "Working..." : "Create account"}
+            {authLoading ? 'Working…' : 'New here? Create an account'}
           </button>
         </form>
       </div>
     );
   }
 
+  if (redeemError) {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          {brand}
+          <div className="teacher-alert teacher-alert--danger px-3 py-2 text-sm">{redeemError}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-3">
-        <h1 className="text-lg font-semibold">Joining {resolved?.course_name}...</h1>
-        {redeemLoading && <p className="text-sm text-gray-500">Enrolling you now...</p>}
-        {redeemError && <p className="text-sm text-red-400">{redeemError}</p>}
+    <div className="auth-screen">
+      <div className="boot-screen">
+        <video src="/thinking.mp4" autoPlay loop muted playsInline className="boot-screen__owl" aria-hidden />
+        <div className="boot-screen__wordmark">Hoot</div>
+        <div className="boot-screen__bar" />
+        <div className="boot-screen__label">
+          Enrolling you in {resolved?.course_name ?? 'this course'}…
+        </div>
       </div>
     </div>
   );
