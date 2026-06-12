@@ -466,8 +466,22 @@ a {
   }
 }
 
-.auth-card > * {
+/* The owl video dissolves into the card via mix-blend-mode; an animated
+   (opacity/transform) ancestor would create a stacking context that
+   isolates the blend and exposes the video's raw background. So the
+   brand block itself never animates — its text children carry the
+   entrance instead. */
+.auth-card > *:not(.auth-brand) {
   animation: auth-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-brand__wordmark,
+.auth-brand__subtitle {
+  animation: auth-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-brand__subtitle {
+  animation-delay: 60ms;
 }
 
 .auth-card > *:nth-child(2) {
