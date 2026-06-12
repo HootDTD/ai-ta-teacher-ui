@@ -43,7 +43,6 @@ export default function JoinPage() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
-  const [, setRedeemLoading] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState(false);
 
@@ -86,7 +85,6 @@ export default function JoinPage() {
   const redeem = useCallback(
     async (token: string) => {
       if (!code || redeemSuccess) return;
-      setRedeemLoading(true);
       setRedeemError(null);
       try {
         const resp = await fetch(`/api/invite-links/redeem/${encodeURIComponent(code)}`, {
@@ -106,8 +104,6 @@ export default function JoinPage() {
         }
       } catch (err) {
         setRedeemError(err instanceof Error ? err.message : "Failed to redeem invite code");
-      } finally {
-        setRedeemLoading(false);
       }
     },
     [code, redeemSuccess, router]
@@ -158,7 +154,7 @@ export default function JoinPage() {
     <div className="auth-brand">
       <video src="/thinking.mp4" autoPlay loop muted playsInline className="auth-brand__owl" aria-hidden />
       <div className="auth-brand__wordmark">Hoot</div>
-      <div className="auth-brand__subtitle">Teacher Console</div>
+      <div className="auth-brand__subtitle">{resolved?.role === 'student' ? 'AI Teaching Assistant' : 'Teacher Console'}</div>
     </div>
   );
 
@@ -230,7 +226,7 @@ export default function JoinPage() {
         <form onSubmit={handleSignIn} className="auth-card">
           {brand}
           <h1 className="text-lg font-semibold teacher-section-title" style={{ textAlign: 'center', margin: 0 }}>
-            Join {resolved?.course_name}
+            Join {resolved?.course_name ?? 'this course'}
           </h1>
           <p className="text-sm teacher-muted" style={{ textAlign: 'center', margin: 0 }}>
             Sign in or create an account to join this course.
