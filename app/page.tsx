@@ -13,6 +13,7 @@ import {
   signUpWithPassword,
   type StoredSession,
 } from './lib/auth';
+import AuthoredSetsPanel from './components/AuthoredSetsPanel';
 
 const WEEK_KINDS = {
   notes: 'Course Notes',
@@ -1226,6 +1227,10 @@ export default function TeacherConsole() {
             </div>
           );
         })()}
+
+        {selectedClassId && (
+          <AuthoredSetsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
+        )}
 
         {loading && (
           <div className="rounded-2xl teacher-panel-soft px-4 py-6 text-sm teacher-muted flex items-center gap-3">
