@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, ClipboardCopy, Link2, RefreshCcw, Trash2, UploadCloud, Sun, Moon, MoreVertical } from 'lucide-react';
+import {
+  BookOpen,
+  ListChecks,
+  SlidersHorizontal,
+  Link2,
+  FileText,
+  Menu,
+  Calendar,
+  Sun,
+  Moon,
+  MoreVertical,
+} from 'lucide-react';
 import {
   SUPABASE_AUTH_ENABLED,
   clearStoredSession,
@@ -13,104 +24,34 @@ import {
   signUpWithPassword,
   type StoredSession,
 } from './lib/auth';
+import {
+  WEEK_KINDS,
+  RESOURCE_WEIGHT_LABELS,
+  POLL_INTERVAL_MS,
+  isPendingStatus,
+  type WeekKind,
+  type WeightKind,
+  type ClassOption,
+  type UploadSummary,
+  type CourseState,
+  type RetrievalWeights,
+  type RetrievalWeightResponse,
+  type InviteLink,
+} from './lib/teacher';
 import AuthoredSetsPanel from './components/AuthoredSetsPanel';
+import TeacherSidebar, { type SectionKey } from './components/TeacherSidebar';
+import MaterialsSection from './components/MaterialsSection';
+import AiTuningSection from './components/AiTuningSection';
+import InvitesSection from './components/InvitesSection';
+import ReportsSection from './components/ReportsSection';
 
-const WEEK_KINDS = {
-  notes: 'Course Notes',
-  slides: 'Course Slides',
-} as const;
-
-const RESOURCE_WEIGHT_LABELS = {
-  textbook: 'Textbook',
-  slides: 'Slides',
-  notes: 'Notes',
-} as const;
-
-type WeekKind = keyof typeof WEEK_KINDS;
-type WeightKind = keyof typeof RESOURCE_WEIGHT_LABELS;
-type UploadStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'superseded';
-
-type ClassOption = {
-  id: number;
-  slug: string;
-  name: string;
-  subject_name: string;
-};
-
-type UploadSummary = {
-  id: string;
-  week: number;
-  kind: WeekKind | 'textbook';
-  title: string;
-  status?: UploadStatus;
-  uploaded_at?: string;
-  source_name?: string;
-  page_count?: number;
-  index_path?: string;
-  doc_id?: string;
-  error_message?: string;
-  warning_count?: number;
-  started_at?: string;
-  completed_at?: string;
-  ocr_provider?: string;
-  ocr_summary?: Record<string, unknown>;
-};
-
-type SectionState = {
-  latest: UploadSummary | null;
-  history: UploadSummary[];
-};
-
-type WeekState = {
-  week: number;
-  notes: SectionState;
-  slides: SectionState;
-};
-
-type CourseState = {
-  search_space_id: number;
-  course: string;
-  slug: string;
-  current_week: number;
-  weeks: WeekState[];
-  // Course-wide textbook (not pinned to a week). Always present from the API.
-  textbook: SectionState;
-};
-
-type RetrievalWeights = Record<WeightKind, number>;
-
-type RetrievalWeightResponse = {
-  search_space_id: number;
-  course: string;
-  weights: RetrievalWeights;
-  defaults: RetrievalWeights;
-  bounds: {
-    min: number;
-    max: number;
-  };
-};
-
-type InviteLink = {
-  id: number;
-  code: string;
-  search_space_id: number;
-  role: 'student' | 'teacher';
-  is_active: boolean;
-  max_uses: number | null;
-  use_count: number;
-  expires_at: string | null;
-  created_at: string;
-};
-
-const MAX_WEEKS = 16;
-const POLL_INTERVAL_MS = 4000;
-
-
-
-const isPendingStatus = (status?: string): status is 'queued' | 'processing' => {
-  return status === 'queued' || status === 'processing';
-};
-
+const SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
+  { key: 'materials', label: 'Materials', icon: BookOpen },
+  { key: 'problem-sets', label: 'Problem Sets', icon: ListChecks },
+  { key: 'ai-tuning', label: 'AI Tuning', icon: SlidersHorizontal },
+  { key: 'invites', label: 'Invites', icon: Link2 },
+  { key: 'reports', label: 'Reports', icon: FileText },
+];
 
 export default function TeacherConsole() {
   const [authReady, setAuthReady] = useState(false);
@@ -147,6 +88,8 @@ export default function TeacherConsole() {
   const [darkMode, setDarkMode] = useState(false);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useState<SectionKey>('materials');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('theme');
@@ -860,91 +803,69 @@ export default function TeacherConsole() {
   }
 
   return (
-    <div className="min-h-screen teacher-shell flex flex-col">
-      <header className="teacher-header border-b sticky top-0 backdrop-blur">
-        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
-          <div className="teacher-brand">Hoot | Teacher Console</div>
-          <div ref={headerMenuRef} className="relative">
-            <button
-              onClick={() => setHeaderMenuOpen((prev) => !prev)}
-              className="header-menu-trigger"
-              type="button"
-              aria-label="Menu"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
-            <AnimatePresence>
-              {headerMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                  transition={{ duration: 0.16, ease: 'easeOut' }}
-                  className="header-menu"
-                >
-                  <button
-                    onClick={toggleTheme}
-                    className="header-menu-item"
-                    type="button"
-                  >
-                    {darkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                    {darkMode ? 'Light mode' : 'Dark mode'}
-                  </button>
-                  <button
-                    onClick={() => { handleSignOut(); setHeaderMenuOpen(false); }}
-                    className="header-menu-item"
-                    type="button"
-                  >
-                    Sign out of {userLabel}
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </header>
+    <div className="teacher-layout teacher-shell">
+      <TeacherSidebar
+        sections={SECTIONS}
+        active={activeSection}
+        onSelect={(key) => {
+          setActiveSection(key);
+          setSidebarOpen(false);
+        }}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-6 space-y-4">
-        <div className="rounded-3xl teacher-panel p-5">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
-            <div className="flex flex-col">
-              <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Class</span>
+      <div className="teacher-main">
+        <header className="teacher-topbar">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="header-menu-trigger lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+
+            {/* Class context */}
+            <div className="flex-1 min-w-0 flex items-center gap-2">
               {showCreateClass ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <input
                     type="text"
                     placeholder="Class name (e.g. Fluid Mechanics)"
                     value={newClassName}
                     onChange={(e) => setNewClassName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateClass(); }}
-                    className="teacher-input h-10 rounded-2xl px-3 text-sm flex-1"
+                    className="teacher-input h-9 rounded-2xl px-3 text-sm flex-1 min-w-0"
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={() => void handleCreateClass()}
                     disabled={creatingClass || !newClassName.trim()}
-                    className="teacher-button-primary rounded-2xl px-4 h-10 text-sm font-semibold whitespace-nowrap"
+                    className="teacher-button-primary rounded-2xl px-3 h-9 text-sm font-semibold whitespace-nowrap"
                   >
-                    {creatingClass ? 'Creating...' : 'Create'}
+                    {creatingClass ? 'Creating…' : 'Create'}
                   </button>
                   {classOptions.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowCreateClass(false)}
-                      className="teacher-button-secondary rounded-2xl px-3 h-10 text-sm"
+                      className="teacher-button-secondary rounded-2xl px-3 h-9 text-sm"
                     >
                       Cancel
                     </button>
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <>
                   <select
                     value={selectedClassId ?? ''}
                     onChange={(e) => setSelectedClassId(Number(e.target.value))}
                     disabled={loadingClasses || classOptions.length === 0}
-                    className="teacher-input h-10 rounded-2xl px-3 text-sm flex-1"
+                    className="teacher-input h-9 rounded-2xl px-3 text-sm min-w-0 flex-1 max-w-[16rem]"
+                    aria-label="Active class"
                   >
                     {classOptions.length === 0 && <option value="">No classes yet</option>}
                     {classOptions.map((option) => (
@@ -956,362 +877,152 @@ export default function TeacherConsole() {
                   <button
                     type="button"
                     onClick={() => setShowCreateClass(true)}
-                    className="teacher-button-secondary rounded-2xl px-3 h-10 text-sm font-semibold whitespace-nowrap"
+                    className="teacher-button-secondary rounded-2xl px-3 h-9 text-sm font-semibold whitespace-nowrap"
                   >
-                    + New Class
+                    + New
                   </button>
-                </div>
+                </>
               )}
             </div>
 
-            {selectedClassId && !showCreateClass && (
-              <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wide teacher-muted mb-1">Current Week</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={MAX_WEEKS}
-                    value={pendingWeek}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      if (Number.isNaN(value)) {
-                        setPendingWeek(1);
-                        return;
-                      }
-                      const clamped = Math.min(MAX_WEEKS, Math.max(1, value));
-                      setPendingWeek(clamped);
-                    }}
-                    className="teacher-input h-10 w-16 rounded-2xl px-2 text-center text-sm"
-                  />
-                  <button
-                    onClick={handleCurrentWeekSave}
-                    disabled={savingWeek || !courseState || pendingWeek === courseState.current_week}
-                    className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold"
+            {/* Active-week indicator */}
+            {courseState && !showCreateClass && (
+              <span className="teacher-week-pill hidden sm:inline-flex">
+                <Calendar className="h-3.5 w-3.5" />
+                Week {courseState.current_week}
+              </span>
+            )}
+
+            {/* User menu */}
+            <div ref={headerMenuRef} className="relative">
+              <button
+                onClick={() => setHeaderMenuOpen((prev) => !prev)}
+                className="header-menu-trigger"
+                type="button"
+                aria-label="Account menu"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              <AnimatePresence>
+                {headerMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                    className="header-menu"
                   >
-                    {savingWeek ? 'Saving…' : 'Update'}
-                  </button>
-                </div>
-                <p className="text-xs teacher-muted flex items-center gap-1.5 mt-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Students see uploads through the active week.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {selectedClassId && !showCreateClass && (
-          <div className="rounded-3xl teacher-panel-soft p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 teacher-muted" />
-              <h2 className="text-lg font-semibold teacher-section-title">Invite Links</h2>
+                    <button onClick={toggleTheme} className="header-menu-item" type="button">
+                      {darkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                      {darkMode ? 'Light mode' : 'Dark mode'}
+                    </button>
+                    <button
+                      onClick={() => { handleSignOut(); setHeaderMenuOpen(false); }}
+                      className="header-menu-item"
+                      type="button"
+                    >
+                      Sign out of {userLabel}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            {loadingInvites ? (
-              <div className="text-sm teacher-muted flex items-center gap-3">
-                <span className="boot-screen__bar" />
-                Loading invite links…
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {(['student', 'teacher'] as const).map((role) => {
-                  const activeLink = role === 'student' ? activeStudentLink : activeTeacherLink;
-                  const generating = generatingInvite === role;
-                  return (
-                    <div key={role} className="rounded-2xl teacher-panel-subtle p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold teacher-section-title capitalize">{role} Invite</span>
-                        {activeLink && (
-                          <span className="text-xs teacher-muted">
-                            {activeLink.use_count} use{activeLink.use_count !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      {activeLink ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <code className="flex-1 min-w-0 truncate text-xs teacher-muted bg-black/5 dark:bg-white/5 rounded-lg px-2 py-1.5">
-                            {getInviteUrl(activeLink.code, role)}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={() => void handleCopyInvite(activeLink.code, role)}
-                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
-                          >
-                            <ClipboardCopy className="h-3.5 w-3.5" />
-                            {copiedCode === activeLink.code ? 'Copied!' : 'Copy'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleGenerateInvite(role)}
-                            disabled={generating}
-                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
-                          >
-                            <RefreshCcw className="h-3.5 w-3.5" />
-                            {generating ? 'Generating…' : 'Regenerate'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleRevokeInvite(activeLink.id)}
-                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1 text-red-500"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Revoke
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void handleGenerateInvite(role)}
-                          disabled={generating}
-                          className="teacher-button-primary rounded-xl px-4 py-2 text-sm font-semibold inline-flex items-center gap-1.5"
-                        >
-                          <Link2 className="h-4 w-4" />
-                          {generating ? 'Generating…' : `Generate ${role} invite link`}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        )}
+        </header>
 
-        {error && (
-          <div className="rounded-2xl teacher-alert teacher-alert--danger px-4 py-3 text-sm">
-            {error}
-          </div>
-        )}
-        {flash && (
-          <div className="rounded-2xl teacher-alert teacher-alert--success px-4 py-3 text-sm">
-            {flash}
-          </div>
-        )}
-        {hasPendingUploads && (
-          <div className="rounded-2xl teacher-alert teacher-alert--warning px-4 py-3 text-sm flex items-center gap-2">
-            <RefreshCcw className="h-4 w-4 animate-spin" />
-            Uploads are being processed. This page will update automatically.
-          </div>
-        )}
-
-        <div className="rounded-3xl teacher-panel-soft p-5 space-y-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold teacher-section-title">Retrieval Resource Weights</h2>
-            <p className="text-sm teacher-muted">
-              Adjust how much the AI prioritises each resource type. Higher values push that material to the top.
-            </p>
-          </div>
-          {loadingWeights && (
-            <div className="rounded-2xl teacher-panel-subtle px-4 py-4 text-sm teacher-muted flex items-center gap-3">
-              <span className="boot-screen__bar" />
-              Loading weights…
+        <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-8">
+          {(error || flash) && (
+            <div className="space-y-2 mb-5">
+              {error && (
+                <div className="rounded-2xl teacher-alert teacher-alert--danger px-4 py-3 text-sm">{error}</div>
+              )}
+              {flash && (
+                <div className="rounded-2xl teacher-alert teacher-alert--success px-4 py-3 text-sm">{flash}</div>
+              )}
             </div>
           )}
-          {!loadingWeights && weights && (
-            <>
-              <div className="space-y-3">
-                {(Object.keys(RESOURCE_WEIGHT_LABELS) as WeightKind[]).map((kind) => {
-                  const label = RESOURCE_WEIGHT_LABELS[kind];
-                  const value = weights[kind];
-                  const defaultValue = defaultWeights?.[kind];
-                  return (
-                    <div key={kind} className="rounded-2xl teacher-panel-subtle p-4 space-y-3">
-                      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                        <div className="text-sm font-semibold teacher-section-title">{label}</div>
-                        <div className="text-xs teacher-muted">
-                          Current <span className="teacher-value">{value.toFixed(2)}</span>
-                          {typeof defaultValue === 'number' && (
-                            <span className="ml-3 teacher-muted">Default {defaultValue.toFixed(2)}</span>
-                          )}
-                        </div>
-                      </div>
-                      <input
-                        type="range"
-                        min={weightBounds?.min ?? 0}
-                        max={weightBounds?.max ?? 1}
-                        step={0.01}
-                        value={value}
-                        onChange={(event) => handleWeightChange(kind, Number(event.target.value))}
-                        className="w-full teacher-range"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handleSaveWeights}
-                  disabled={!weightsDirty || savingWeights}
-                  className="teacher-button-primary h-11 rounded-2xl px-4 text-sm font-semibold"
-                >
-                  {savingWeights ? 'Saving…' : weightsDirty ? 'Save weights' : 'Saved'}
-                </button>
+
+          {!selectedClassId ? (
+            <div className="rounded-3xl teacher-panel p-8 text-center space-y-3">
+              <h1 className="text-xl font-semibold teacher-section-title">No class yet</h1>
+              <p className="text-sm teacher-muted">
+                Create your first class to start uploading materials and inviting students.
+              </p>
+              {!showCreateClass && (
                 <button
                   type="button"
-                  onClick={handleResetWeights}
-                  disabled={!canResetToDefaults || savingWeights}
-                  className="teacher-button-secondary h-11 rounded-2xl px-4 text-sm font-semibold"
+                  onClick={() => setShowCreateClass(true)}
+                  className="teacher-button-primary rounded-2xl px-4 h-10 text-sm font-semibold"
                 >
-                  Reset to defaults
+                  + New Class
                 </button>
-              </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {activeSection === 'materials' && (
+                <MaterialsSection
+                  courseState={courseState}
+                  loading={loading}
+                  pendingWeek={pendingWeek}
+                  onPendingWeekChange={setPendingWeek}
+                  savingWeek={savingWeek}
+                  onSaveCurrentWeek={handleCurrentWeekSave}
+                  hasPendingUploads={hasPendingUploads}
+                  uploadingKey={uploadingKey}
+                  retryingUploadId={retryingUploadId}
+                  onUpload={handleUpload}
+                  onUploadTextbook={handleUploadTextbook}
+                  onRetry={handleRetryUpload}
+                />
+              )}
+
+              {activeSection === 'problem-sets' && (
+                <div className="space-y-6">
+                  <header className="space-y-1">
+                    <h1 className="text-2xl font-semibold teacher-section-title">Problem sets</h1>
+                    <p className="text-sm teacher-muted">
+                      Upload paired problem and solution PDFs. Hoot extracts and validates each problem for you.
+                    </p>
+                  </header>
+                  <AuthoredSetsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
+                </div>
+              )}
+
+              {activeSection === 'ai-tuning' && (
+                <AiTuningSection
+                  weights={weights}
+                  defaultWeights={defaultWeights}
+                  weightBounds={weightBounds}
+                  loadingWeights={loadingWeights}
+                  savingWeights={savingWeights}
+                  weightsDirty={weightsDirty}
+                  canResetToDefaults={canResetToDefaults}
+                  onWeightChange={handleWeightChange}
+                  onSave={handleSaveWeights}
+                  onReset={handleResetWeights}
+                />
+              )}
+
+              {activeSection === 'invites' && (
+                <InvitesSection
+                  loadingInvites={loadingInvites}
+                  activeStudentLink={activeStudentLink}
+                  activeTeacherLink={activeTeacherLink}
+                  generatingInvite={generatingInvite}
+                  copiedCode={copiedCode}
+                  getInviteUrl={getInviteUrl}
+                  onGenerate={handleGenerateInvite}
+                  onCopy={handleCopyInvite}
+                  onRevoke={handleRevokeInvite}
+                />
+              )}
+
+              {activeSection === 'reports' && <ReportsSection />}
             </>
           )}
-          {!loadingWeights && !weights && (
-            <div className="rounded-2xl teacher-alert teacher-alert--danger px-4 py-4 text-sm">
-              Failed to load retrieval weights. Please retry selecting the class.
-            </div>
-          )}
-        </div>
-
-        {courseState && (() => {
-          const section = courseState.textbook ?? { latest: null, history: [] };
-          const latest = section.latest;
-          const uploading = uploadingKey === 'textbook';
-          const pendingAttempt =
-            section.history.find((entry) => entry.id !== latest?.id && isPendingStatus(entry.status)) ?? null;
-          const failedAttempt =
-            section.history.find((entry) => entry.id !== latest?.id && entry.status === 'failed') ??
-            (!latest ? section.history.find((entry) => entry.status === 'failed') ?? null : null);
-          return (
-            <div className="rounded-3xl teacher-panel-soft p-5">
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold teacher-section-title">Course textbook</div>
-                <span className="rounded-full teacher-pill px-3 py-1 text-xs">All weeks</span>
-              </div>
-              <p className="mt-1 text-sm teacher-muted">
-                The textbook is searched for every question in this course, regardless of the active week.
-              </p>
-              <div className="mt-4 rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
-                {latest ? (
-                  <div className="text-sm teacher-muted">
-                    {latest.source_name || latest.title} · {latest.page_count ? `${latest.page_count} pages` : 'Processing'}
-                  </div>
-                ) : (
-                  <div className="text-sm teacher-muted">No textbook uploaded yet.</div>
-                )}
-                {pendingAttempt && (
-                  <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-sm flex items-center gap-2">
-                    <RefreshCcw className="h-4 w-4 animate-spin" />
-                    {latest ? 'New textbook processing…' : 'Processing…'}
-                  </div>
-                )}
-                {failedAttempt && !pendingAttempt && (
-                  <div className="rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm flex items-center justify-between gap-2">
-                    <span>{latest ? 'Replacement failed' : 'Upload failed'}{failedAttempt.error_message ? ` — ${failedAttempt.error_message}` : ''}</span>
-                    <button
-                      type="button"
-                      onClick={() => void handleRetryUpload(failedAttempt)}
-                      disabled={retryingUploadId === failedAttempt.id}
-                      className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
-                    >
-                      {retryingUploadId === failedAttempt.id ? 'Retrying…' : 'Retry'}
-                    </button>
-                  </div>
-                )}
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl teacher-button-secondary px-3 py-2 text-sm font-semibold self-start">
-                  <UploadCloud className="h-4 w-4" />
-                  {uploading ? 'Uploading…' : latest ? 'Replace textbook' : 'Upload textbook'}
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      void handleUploadTextbook(file);
-                      event.target.value = '';
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-          );
-        })()}
-
-        {selectedClassId && (
-          <AuthoredSetsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
-        )}
-
-        {loading && (
-          <div className="rounded-2xl teacher-panel-soft px-4 py-6 text-sm teacher-muted flex items-center gap-3">
-            <span className="boot-screen__bar" />
-            Loading weekly timeline…
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {weeks.map((week) => (
-            <motion.div
-              key={week.week}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className="rounded-3xl teacher-panel-soft p-5"
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold teacher-section-title">Week {week.week}</div>
-                {courseState?.current_week === week.week && (
-                  <span className="rounded-full teacher-pill teacher-pill--success px-3 py-1 text-xs">Active week</span>
-                )}
-              </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {(Object.keys(WEEK_KINDS) as WeekKind[]).map((kind) => {
-                  const section = kind === 'notes' ? week.notes : week.slides;
-                  const latest = section.latest;
-                  const uploading = uploadingKey === `${week.week}-${kind}`;
-                  const pendingAttempt =
-                    section.history.find((entry) => entry.id !== latest?.id && isPendingStatus(entry.status)) ?? null;
-                  const failedAttempt =
-                    section.history.find((entry) => entry.id !== latest?.id && entry.status === 'failed') ??
-                    (!latest ? section.history.find((entry) => entry.status === 'failed') ?? null : null);
-                  return (
-                    <div key={kind} className="rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
-                      {latest && (
-                        <div className="text-sm teacher-muted">
-                          {latest.source_name || latest.title} · {latest.page_count ? `${latest.page_count} pages` : 'Processing'}
-                        </div>
-                      )}
-                      {pendingAttempt && (
-                        <div className="rounded-2xl teacher-alert teacher-alert--warning px-3 py-2 text-sm flex items-center gap-2">
-                          <RefreshCcw className="h-4 w-4 animate-spin" />
-                          {latest ? 'New version processing…' : 'Processing…'}
-                        </div>
-                      )}
-                      {failedAttempt && !pendingAttempt && (
-                        <div className="rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm flex items-center justify-between gap-2">
-                          <span>{latest ? 'Replacement failed' : 'Upload failed'}{failedAttempt.error_message ? ` — ${failedAttempt.error_message}` : ''}</span>
-                          <button
-                            type="button"
-                            onClick={() => void handleRetryUpload(failedAttempt)}
-                            disabled={retryingUploadId === failedAttempt.id}
-                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold"
-                          >
-                            {retryingUploadId === failedAttempt.id ? 'Retrying…' : 'Retry'}
-                          </button>
-                        </div>
-                      )}
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl teacher-button-secondary px-3 py-2 text-sm font-semibold self-start">
-                        <UploadCloud className="h-4 w-4" />
-                        {uploading ? 'Uploading…' : `Upload Week ${week.week} ${kind === 'notes' ? 'Notes' : 'Slides'}`}
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          className="sr-only"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0] || null;
-                            handleUpload(file, week.week, kind);
-                            event.target.value = '';
-                          }}
-                        />
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
