@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from 'react';
-import { UploadCloud, RefreshCcw, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { UploadCloud, RefreshCcw, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 
 type AuthoredStatus = 'pending' | 'indexing' | 'provisioning' | 'done' | 'failed';
 
@@ -75,6 +75,8 @@ export default function AuthoredSetsPanel({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const authHeaders = useCallback(
     (extra?: Record<string, string>): Record<string, string> => ({
@@ -165,6 +167,31 @@ export default function AuthoredSetsPanel({
     }
   };
 
+  const handleDelete = async (setId: number) => {
+    setDeletingId(setId);
+    setError(null);
+    try {
+      const resp = await fetch(`/api/teacher/authored-sets/${setId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!resp.ok) throw new Error((await resp.text()) || 'Delete failed');
+      // Drop any cached detail and collapse if this set was open.
+      setDetails((prev) => {
+        const next = { ...prev };
+        delete next[setId];
+        return next;
+      });
+      setExpandedId((cur) => (cur === setId ? null : cur));
+      setConfirmDeleteId(null);
+      await fetchSets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const toggleExpand = (setId: number) => {
     setExpandedId((cur) => {
       const next = cur === setId ? null : setId;
@@ -244,24 +271,62 @@ export default function AuthoredSetsPanel({
           const counts = detail?.result_summary?.counts;
           return (
             <div key={set.set_id} className="rounded-2xl teacher-panel-subtle p-4">
-              <button
-                type="button"
-                onClick={() => toggleExpand(set.set_id)}
-                className="flex w-full items-center justify-between gap-3 text-left"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  Set {set.set_index}
-                </span>
-                <span className="flex items-center gap-3">
-                  {counts && (
-                    <span className="text-xs teacher-muted">
-                      {counts.promoted ?? 0} promoted · {counts.held_for_review ?? 0} held · {counts.rejected ?? 0} rejected
-                    </span>
-                  )}
-                  <StatusBadge status={set.status} />
-                </span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(set.set_id)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    Set {set.set_index}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    {counts && (
+                      <span className="text-xs teacher-muted">
+                        {counts.promoted ?? 0} promoted · {counts.held_for_review ?? 0} held · {counts.rejected ?? 0} rejected
+                      </span>
+                    )}
+                    <StatusBadge status={set.status} />
+                  </span>
+                </button>
+
+                {confirmDeleteId === set.set_id ? (
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={deletingId === set.set_id}
+                      onClick={() => void handleDelete(set.set_id)}
+                      className="teacher-alert teacher-alert--danger rounded-xl px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    >
+                      {deletingId === set.set_id ? 'Deleting…' : 'Confirm delete'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingId === set.set_id}
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="teacher-button-secondary rounded-xl px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Delete set ${set.set_index}`}
+                    title="Delete set"
+                    onClick={() => setConfirmDeleteId(set.set_id)}
+                    className="teacher-button-secondary shrink-0 rounded-xl p-2 text-rose-500 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {confirmDeleteId === set.set_id && (
+                <p className="mt-2 text-xs teacher-muted">
+                  This permanently removes the set, its reference PDFs, and any problems it produced.
+                </p>
+              )}
 
               {expanded && (
                 <div className="mt-3 border-t pt-3">
