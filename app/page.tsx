@@ -19,6 +19,7 @@ import {
   SUPABASE_AUTH_ENABLED,
   clearStoredSession,
   ensureActiveSession,
+  ensureFreshStoredSession,
   loadStoredSession,
   saveStoredSession,
   signInWithPassword,
@@ -166,6 +167,30 @@ export default function TeacherConsole() {
       cancelled = true;
     };
   }, []);
+
+  // Proactive token refresh: Supabase tokens expire after ~1h and the panels
+  // hold the token via the accessToken prop, so a console tab left open would
+  // start 401ing ("Invalid bearer token"). Refresh the stored session on a
+  // 4-min tick (auth.ts buffers 7 min) + on tab-visible (wake-from-sleep,
+  // where timers didn't fire), and adopt the rotated token into React state.
+  useEffect(() => {
+    if (!authReady || !session) return;
+    const sync = async () => {
+      const fresh = await ensureFreshStoredSession();
+      if (fresh && fresh.access_token !== session.access_token) {
+        setSession(fresh);
+      }
+    };
+    const timer = setInterval(() => void sync(), 240_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authReady, session]);
 
   const fetchClassOptions = useCallback(async () => {
     if (!accessToken) {
