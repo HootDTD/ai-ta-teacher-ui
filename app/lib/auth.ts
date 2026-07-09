@@ -160,3 +160,38 @@ export async function ensureActiveSession(session: StoredSession | null): Promis
     return null;
   }
 }
+
+// --- Proactive session refresh ---------------------------------------------
+// Supabase access tokens expire after ~1h. ensureActiveSession() only runs at
+// page load, so a console tab left open starts 401ing ("Invalid bearer
+// token") once the token lapses. ensureFreshStoredSession() refreshes the
+// *stored* session whenever less than REFRESH_BUFFER_SEC of validity remains.
+// Single-flighted: Supabase rotates refresh tokens, so two concurrent
+// refreshes would invalidate each other. On refresh failure it returns the
+// stale session unchanged — a transient network blip must not sign a teacher
+// out mid-class; the eventual 401 surfaces instead.
+
+const REFRESH_BUFFER_SEC = 420; // refresh when <7min left; the driver ticks every 4min
+
+let refreshInFlight: Promise<StoredSession | null> | null = null;
+
+export async function ensureFreshStoredSession(): Promise<StoredSession | null> {
+  const session = loadStoredSession();
+  if (!session?.access_token) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const expiresAt = Number(session.expires_at || 0);
+  if (!expiresAt || expiresAt > nowSec + REFRESH_BUFFER_SEC) return session;
+  if (!session.refresh_token) return session;
+  if (!refreshInFlight) {
+    refreshInFlight = refreshSession(session.refresh_token)
+      .then((fresh) => {
+        saveStoredSession(fresh);
+        return fresh;
+      })
+      .catch(() => session)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
