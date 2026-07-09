@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
+  Lightbulb,
   ListChecks,
   SlidersHorizontal,
   Link2,
@@ -39,6 +40,7 @@ import {
   type InviteLink,
 } from './lib/teacher';
 import AuthoredSetsPanel from './components/AuthoredSetsPanel';
+import ConceptsPanel from './components/ConceptsPanel';
 import TeacherSidebar, { type SectionKey } from './components/TeacherSidebar';
 import MaterialsSection from './components/MaterialsSection';
 import AiTuningSection from './components/AiTuningSection';
@@ -47,6 +49,7 @@ import ReportsSection from './components/ReportsSection';
 
 const SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'materials', label: 'Materials', icon: BookOpen },
+  { key: 'concepts', label: 'Concepts', icon: Lightbulb },
   { key: 'problem-sets', label: 'Problem Sets', icon: ListChecks },
   { key: 'ai-tuning', label: 'AI Tuning', icon: SlidersHorizontal },
   { key: 'invites', label: 'Invites', icon: Link2 },
@@ -975,6 +978,19 @@ export default function TeacherConsole() {
                   onUploadTextbook={handleUploadTextbook}
                   onRetry={handleRetryUpload}
                 />
+              )}
+
+              {activeSection === 'concepts' && (
+                <div className="space-y-6">
+                  <header className="space-y-1">
+                    <h1 className="text-2xl font-semibold teacher-section-title">Concepts</h1>
+                    <p className="text-sm teacher-muted">
+                      Write the concepts students will teach back. Problem sets you upload are
+                      matched against this list.
+                    </p>
+                  </header>
+                  <ConceptsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
+                </div>
               )}
 
               {activeSection === 'problem-sets' && (
