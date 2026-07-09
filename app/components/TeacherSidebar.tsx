@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 
-export type SectionKey = 'materials' | 'problem-sets' | 'ai-tuning' | 'invites' | 'reports';
+export type SectionKey = 'materials' | 'concepts' | 'problem-sets' | 'ai-tuning' | 'invites' | 'reports';
 
 type SectionDef = { key: SectionKey; label: string; icon: LucideIcon };
 
