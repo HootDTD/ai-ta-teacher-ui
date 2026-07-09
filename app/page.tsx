@@ -41,13 +41,19 @@ import {
 } from './lib/teacher';
 import AuthoredSetsPanel from './components/AuthoredSetsPanel';
 import ConceptsPanel from './components/ConceptsPanel';
+import { APOLLO_ONLY } from './lib/flags';
 import TeacherSidebar, { type SectionKey } from './components/TeacherSidebar';
 import MaterialsSection from './components/MaterialsSection';
 import AiTuningSection from './components/AiTuningSection';
 import InvitesSection from './components/InvitesSection';
 import ReportsSection from './components/ReportsSection';
 
-const SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
+// Apollo-only deployments hide the Hoot-specific sections: AI Tuning
+// (retrieval weights) and Reports (AI-use reports on Hoot chats) — the
+// student deployment has Hoot Q&A off. Everything else feeds Apollo.
+const HOOT_ONLY_SECTIONS: SectionKey[] = ['ai-tuning', 'reports'];
+
+const ALL_SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'materials', label: 'Materials', icon: BookOpen },
   { key: 'concepts', label: 'Concepts', icon: Lightbulb },
   { key: 'problem-sets', label: 'Problem Sets', icon: ListChecks },
@@ -55,6 +61,10 @@ const SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'invites', label: 'Invites', icon: Link2 },
   { key: 'reports', label: 'Reports', icon: FileText },
 ];
+
+const SECTIONS = ALL_SECTIONS.filter(
+  (s) => !APOLLO_ONLY || !HOOT_ONLY_SECTIONS.includes(s.key),
+);
 
 export default function TeacherConsole() {
   const [authReady, setAuthReady] = useState(false);

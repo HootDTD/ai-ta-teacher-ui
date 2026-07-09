@@ -10,7 +10,7 @@ related:
   - ai-ta-teacher-ui/_overview
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-07-08
+last_verified: 2026-07-09
 stub: false
 ---
 
@@ -20,7 +20,7 @@ Three UI routes (all `"use client"` single-file pages, no shared components) plu
 
 | Route | File | Purpose |
 |-------|------|---------|
-| `/` | `app/page.tsx` (~1250 lines, `TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, a course-wide textbook card, and weekly notes/slides PDF uploads with status polling. Entry states (auth bootstrap, sign-in card, config error) use the shared `.auth-screen`/`.auth-card`/`.boot-screen` design (owl video + Fraunces "Hoot" wordmark, loaded via `next/font` in `app/layout.tsx`); inline loading rows show a `boot-screen__bar` shimmer. |
+| `/` | `app/page.tsx` (~1250 lines, `TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, a course-wide textbook card, and weekly notes/slides PDF uploads with status polling. Entry states (auth bootstrap, sign-in card, config error) use the shared `.auth-screen`/`.auth-card`/`.boot-screen` design (owl video + Fraunces "Hoot" wordmark, loaded via `next/font` in `app/layout.tsx`); inline loading rows show a `boot-screen__bar` shimmer. **Apollo-only mode** (`NEXT_PUBLIC_APOLLO_ONLY=1`, `app/lib/flags.ts`, build-time inlined — pilot prod on, staging off) hides the Hoot-specific sidebar sections `ai-tuning` (retrieval weights) and `reports` (AI-use reports); Materials/Concepts/Problem Sets/Invites stay since they feed Apollo provisioning. |
 | `/join/[code]` | `app/join/[code]/page.tsx` (`JoinPage`) | Teacher invite redemption: resolve code → auth → auto-redeem → redirect to `/`. All branches render on the shared entry-screen design; the brand subtitle is role-aware (`student` invites show "AI Teaching Assistant"). |
 | `/report/[id]` | `app/report/[id]/page.tsx` (`ReportPage`) | AI-use report viewer: markdown render + copy / .md / .json / PDF export. |
 
