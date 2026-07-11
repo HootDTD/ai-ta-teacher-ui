@@ -10,7 +10,7 @@ related:
   - ai-ta-teacher-ui/_overview
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-07-09
+last_verified: 2026-07-11
 stub: false
 ---
 
@@ -41,7 +41,7 @@ All `app/api/**` files are thin pass-through proxies (`export const runtime = 'n
 | `app/api/teacher/upload/route.ts` (POST) | `POST /teacher/upload` (re-sends `req.formData()` as multipart) |
 | `app/api/teacher/uploads/[id]/retry/route.ts` (POST) | `POST /teacher/uploads/{id}/retry` |
 | `app/api/teacher/retrieval-weights/route.ts` (GET, POST) | `GET|POST /teacher/retrieval-weights` |
-| `app/api/teacher/authored-sets/route.ts` (GET, POST) | `GET|POST /apollo/authored-sets` (POST re-sends `req.formData()` as multipart) |
+| `app/api/teacher/authored-sets/route.ts` (GET, POST) | `GET|POST /apollo/authored-sets` (POST re-sends `req.formData()` as multipart; `problem` is required and `solution` is optional) |
 | `app/api/teacher/authored-sets/[set_id]/route.ts` (GET, DELETE) | `GET|DELETE /apollo/authored-sets/{set_id}` |
 | `app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts` (POST) | `POST /apollo/authored-sets/{set_id}/problems/{problem_id}/approve` |
 | `app/api/teacher/concepts/route.ts` (GET, POST) | `GET /apollo/teacher/concepts?search_space_id=`, `POST /apollo/teacher/concepts` — WU-TCA concept authoring, consumed by the console's Concepts section (`app/components/ConceptsPanel.tsx`) |
