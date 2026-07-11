@@ -5,7 +5,7 @@ function backendBase(): string {
   return raw ? raw.replace(/\/+$/, '') : '';
 }
 
-// POST — create an authored problem/solution set (multipart: problem, solution,
+// POST — create an authored problem set (multipart: problem, optional solution,
 // search_space_id). Proxies to the apollo router and returns its JSON verbatim.
 export async function POST(req: Request) {
   const backend = backendBase();

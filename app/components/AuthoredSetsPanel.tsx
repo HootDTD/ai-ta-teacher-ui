@@ -140,8 +140,8 @@ export default function AuthoredSetsPanel({
       setError('Sign in is required.');
       return;
     }
-    if (!problemFile || !solutionFile) {
-      setError('Select both a problem PDF and a solution PDF.');
+    if (!problemFile) {
+      setError('Select a problem PDF.');
       return;
     }
     setUploading(true);
@@ -150,7 +150,7 @@ export default function AuthoredSetsPanel({
       const fd = new FormData();
       fd.append('search_space_id', String(searchSpaceId));
       fd.append('problem', problemFile);
-      fd.append('solution', solutionFile);
+      if (solutionFile) fd.append('solution', solutionFile);
       const resp = await fetch('/api/teacher/authored-sets', {
         method: 'POST',
         headers: authHeaders(),
@@ -225,8 +225,10 @@ export default function AuthoredSetsPanel({
         <span className="rounded-full teacher-pill px-3 py-1 text-xs">Paired PDFs</span>
       </div>
       <p className="mt-1 text-sm teacher-muted">
-        Upload a problem PDF and its matching solution PDF. Each problem is grounded against only
-        its paired solution; low-confidence (e.g. handwritten) extractions are held for your review.
+        Upload a problem PDF and, optionally, its matching solution PDF. Each problem is grounded
+        against only its paired solution; low-confidence (e.g. handwritten) extractions are held
+        for your review. Without a solution PDF, Hoot drafts reference solutions that are held for
+        your review before students see them.
       </p>
 
       {error && (
@@ -243,7 +245,7 @@ export default function AuthoredSetsPanel({
             onPick={setProblemFile}
           />
           <FilePicker
-            label="Solution PDF"
+            label="Solution PDF (optional)"
             file={solutionFile}
             disabled={uploading}
             onPick={setSolutionFile}
@@ -252,7 +254,7 @@ export default function AuthoredSetsPanel({
         <button
           type="button"
           onClick={() => void handleUpload()}
-          disabled={uploading || !problemFile || !solutionFile}
+          disabled={uploading || !problemFile}
           className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold self-start inline-flex items-center gap-2 disabled:opacity-50"
         >
           <UploadCloud className="h-4 w-4" />
