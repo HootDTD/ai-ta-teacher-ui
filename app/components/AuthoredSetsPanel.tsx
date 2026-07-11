@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from 'react';
-import { UploadCloud, RefreshCcw, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { UploadCloud, RefreshCcw, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, Trash2, BookOpen } from 'lucide-react';
 
 type AuthoredStatus = 'pending' | 'indexing' | 'provisioning' | 'done' | 'failed';
 
@@ -11,6 +11,28 @@ type AuthoredSetSummary = {
   status: AuthoredStatus;
   problem_document_id: number | null;
   solution_document_id: number | null;
+};
+
+type DraftStep = {
+  step?: number;
+  entry_type?: string;
+  id?: string;
+  content?: Record<string, unknown>;
+};
+
+type ReviewDraft = {
+  solution_source?: string | null;
+  reference_solution?: DraftStep[] | null;
+};
+
+// Whitelisted projection of the backend's provenance.authored_review; absent on
+// responses from backends predating the review-enrichment deploy.
+type ProblemReview = {
+  required?: boolean;
+  reason?: string | null;
+  approved_reference?: string | null;
+  ocr_draft?: ReviewDraft | null;
+  generated_alt?: ReviewDraft | null;
 };
 
 type AuthoredProblemResult = {
@@ -24,6 +46,9 @@ type AuthoredProblemResult = {
   review_required: boolean;
   reason: string | null;
   concept_problem_id: number | null;
+  problem_text?: string;
+  problem_text_truncated?: boolean;
+  review?: ProblemReview | null;
 };
 
 type AuthoredSetDetail = AuthoredSetSummary & {
@@ -33,6 +58,11 @@ type AuthoredSetDetail = AuthoredSetSummary & {
     error?: string;
   };
 };
+
+type ApproveState =
+  | { status: 'pending' }
+  | { status: 'approved'; reference: 'ocr' | 'generated' }
+  | { status: 'error'; message: string };
 
 const NON_TERMINAL: AuthoredStatus[] = ['pending', 'indexing', 'provisioning'];
 const isNonTerminal = (s: AuthoredStatus) => NON_TERMINAL.includes(s);
@@ -44,6 +74,42 @@ const STATUS_LABEL: Record<AuthoredStatus, string> = {
   done: 'Done',
   failed: 'Failed',
 };
+
+const HOLD_REASON_LABEL: Record<string, string> = {
+  no_matching_concept: 'No matching concept in your course list',
+  generated_no_match: 'AI-drafted solution needs your approval',
+};
+
+function holdReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return 'Needs a decision';
+  return HOLD_REASON_LABEL[reason] ?? reason.replace(/_/g, ' ');
+}
+
+// FastAPI errors arrive as {"detail": "..."} — surface the detail string, not
+// the raw JSON blob.
+async function readErrorDetail(resp: Response, fallback: string): Promise<string> {
+  const text = await resp.text().catch(() => '');
+  try {
+    const data = JSON.parse(text);
+    if (typeof data?.detail === 'string') return data.detail;
+  } catch {
+    /* not JSON — fall through to raw text */
+  }
+  return text || `${fallback} (HTTP ${resp.status})`;
+}
+
+function effectiveOutcome(
+  problem: AuthoredProblemResult,
+  state: ApproveState | undefined,
+): AuthoredProblemResult['outcome'] {
+  if (problem.outcome !== 'held_for_review') return problem.outcome;
+  if (state?.status === 'approved') return 'promoted';
+  // The refetched review carries live state: required flips false on approval.
+  if (problem.review && problem.review.required === false && problem.review.approved_reference) {
+    return 'promoted';
+  }
+  return 'held_for_review';
+}
 
 function StatusBadge({ status }: { status: AuthoredStatus }) {
   if (status === 'failed') {
@@ -63,9 +129,11 @@ function StatusBadge({ status }: { status: AuthoredStatus }) {
 export default function AuthoredSetsPanel({
   searchSpaceId,
   accessToken,
+  onGoToConcepts,
 }: {
   searchSpaceId: number;
   accessToken: string;
+  onGoToConcepts?: () => void;
 }) {
   const [sets, setSets] = useState<AuthoredSetSummary[]>([]);
   const [details, setDetails] = useState<Record<number, AuthoredSetDetail>>({});
@@ -74,7 +142,7 @@ export default function AuthoredSetsPanel({
   const [solutionFile, setSolutionFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [approveState, setApproveState] = useState<Record<number, ApproveState>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -92,7 +160,7 @@ export default function AuthoredSetsPanel({
       const resp = await fetch(`/api/teacher/authored-sets?search_space_id=${searchSpaceId}`, {
         headers: authHeaders(),
       });
-      if (!resp.ok) throw new Error((await resp.text()) || 'Failed to load authored sets');
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Failed to load authored sets'));
       const data = await resp.json();
       setSets(Array.isArray(data?.sets) ? data.sets : []);
     } catch (err) {
@@ -104,7 +172,7 @@ export default function AuthoredSetsPanel({
     async (setId: number) => {
       try {
         const resp = await fetch(`/api/teacher/authored-sets/${setId}`, { headers: authHeaders() });
-        if (!resp.ok) throw new Error((await resp.text()) || 'Failed to load set detail');
+        if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Failed to load set detail'));
         const data: AuthoredSetDetail = await resp.json();
         setDetails((prev) => ({ ...prev, [setId]: data }));
       } catch (err) {
@@ -119,6 +187,7 @@ export default function AuthoredSetsPanel({
     setSets([]);
     setDetails({});
     setExpandedId(null);
+    setApproveState({});
     void fetchSets();
   }, [fetchSets]);
 
@@ -156,7 +225,7 @@ export default function AuthoredSetsPanel({
         headers: authHeaders(),
         body: fd,
       });
-      if (!resp.ok) throw new Error((await resp.text()) || 'Upload failed');
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Upload failed'));
       setProblemFile(null);
       setSolutionFile(null);
       await fetchSets();
@@ -175,7 +244,7 @@ export default function AuthoredSetsPanel({
         method: 'DELETE',
         headers: authHeaders(),
       });
-      if (!resp.ok) throw new Error((await resp.text()) || 'Delete failed');
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Delete failed'));
       // Drop any cached detail and collapse if this set was open.
       setDetails((prev) => {
         const next = { ...prev };
@@ -201,20 +270,33 @@ export default function AuthoredSetsPanel({
   };
 
   const handleApprove = async (setId: number, problemId: number, reference: 'ocr' | 'generated') => {
-    setApprovingId(problemId);
-    setError(null);
+    setApproveState((prev) => ({ ...prev, [problemId]: { status: 'pending' } }));
     try {
       const resp = await fetch(`/api/teacher/authored-sets/${setId}/problems/${problemId}/approve`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ reference }),
       });
-      if (!resp.ok) throw new Error((await resp.text()) || 'Approve failed');
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Approve failed'));
+      // A 200 does NOT mean promoted: approve-time gates can still reject
+      // ({promoted: false, diagnostic}) — surface that instead of silently
+      // leaving the card unchanged.
+      const data = await resp.json().catch(() => null);
+      if (!data?.promoted) {
+        throw new Error(
+          typeof data?.diagnostic === 'string' && data.diagnostic
+            ? `Could not promote: ${data.diagnostic}`
+            : 'Could not promote this problem.',
+        );
+      }
+      setApproveState((prev) => ({ ...prev, [problemId]: { status: 'approved', reference } }));
+      // Authoritative refresh: live review state + counts recompute from it.
       await fetchDetail(setId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Approve failed');
-    } finally {
-      setApprovingId(null);
+      setApproveState((prev) => ({
+        ...prev,
+        [problemId]: { status: 'error', message: err instanceof Error ? err.message : 'Approve failed' },
+      }));
     }
   };
 
@@ -257,7 +339,7 @@ export default function AuthoredSetsPanel({
           disabled={uploading || !problemFile}
           className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold self-start inline-flex items-center gap-2 disabled:opacity-50"
         >
-          <UploadCloud className="h-4 w-4" />
+          {uploading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
           {uploading ? 'Uploading…' : 'Create set'}
         </button>
       </div>
@@ -270,7 +352,20 @@ export default function AuthoredSetsPanel({
         {sets.map((set) => {
           const detail = details[set.set_id];
           const expanded = expandedId === set.set_id;
-          const counts = detail?.result_summary?.counts;
+          const problems = detail?.result_summary?.problems;
+          // Header counts recompute from CURRENT problem states (approvals flip
+          // holds to promoted); the stored counts freeze at provisioning time.
+          const counts = (() => {
+            if (!problems || problems.length === 0) return detail?.result_summary?.counts;
+            const live: Record<string, number> = {};
+            for (const p of problems) {
+              const state = p.concept_problem_id != null ? approveState[p.concept_problem_id] : undefined;
+              const outcome = effectiveOutcome(p, state);
+              live[outcome] = (live[outcome] ?? 0) + 1;
+            }
+            return live;
+          })();
+          const heldCount = counts?.held_for_review ?? 0;
           return (
             <div key={set.set_id} className="rounded-2xl teacher-panel-subtle p-4">
               <div className="flex items-center gap-2">
@@ -338,24 +433,40 @@ export default function AuthoredSetsPanel({
                     </div>
                   )}
                   {set.status !== 'failed' && !detail && (
-                    <div className="text-sm teacher-muted">Loading…</div>
+                    <div className="flex items-center gap-2 text-sm teacher-muted">
+                      <RefreshCcw className="h-4 w-4 animate-spin" />
+                      Loading…
+                    </div>
                   )}
-                  {detail?.result_summary?.problems?.length === 0 && set.status === 'done' && (
+                  {problems?.length === 0 && set.status === 'done' && (
                     <div className="text-sm teacher-muted">No problems were scraped from this set.</div>
                   )}
+                  {set.status === 'done' && (problems?.length ?? 0) > 0 && heldCount === 0 && (
+                    <div className="mb-2 flex items-center gap-2 rounded-xl teacher-panel-soft px-3 py-2 text-sm teacher-muted">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                      Nothing left to review — every problem in this set is resolved.
+                    </div>
+                  )}
                   <div className="flex flex-col gap-2">
-                    {(detail?.result_summary?.problems ?? []).map((problem, idx) => (
-                      <ProblemRow
-                        key={problem.concept_problem_id ?? idx}
-                        problem={problem}
-                        approving={approvingId === problem.concept_problem_id}
-                        onApprove={(reference) => {
-                          if (problem.concept_problem_id != null) {
-                            void handleApprove(set.set_id, problem.concept_problem_id, reference);
-                          }
-                        }}
-                      />
-                    ))}
+                    {(problems ?? []).map((problem, idx) => {
+                      const state =
+                        problem.concept_problem_id != null
+                          ? approveState[problem.concept_problem_id]
+                          : undefined;
+                      return (
+                        <ProblemRow
+                          key={problem.concept_problem_id ?? idx}
+                          problem={problem}
+                          approveState={state}
+                          onGoToConcepts={onGoToConcepts}
+                          onApprove={(reference) => {
+                            if (problem.concept_problem_id != null) {
+                              void handleApprove(set.set_id, problem.concept_problem_id, reference);
+                            }
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -399,30 +510,87 @@ function FilePicker({
   );
 }
 
+function stepContentText(content?: Record<string, unknown>): string {
+  if (!content || typeof content !== 'object') return '';
+  return Object.entries(content)
+    .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+    .join(' · ');
+}
+
+function DraftPreview({ heading, draft }: { heading: string; draft: ReviewDraft }) {
+  const steps = Array.isArray(draft.reference_solution) ? draft.reference_solution : [];
+  return (
+    <div className="rounded-xl teacher-panel-soft px-3 py-2">
+      <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">{heading}</div>
+      {steps.length === 0 ? (
+        <p className="mt-1 text-xs teacher-muted">No steps recorded in this draft.</p>
+      ) : (
+        <ol className="mt-1 flex flex-col gap-1">
+          {steps.map((step, idx) => (
+            <li key={step.id ?? idx} className="text-xs leading-relaxed">
+              <span className="font-semibold">{step.step ?? idx + 1}.</span>{' '}
+              {step.entry_type && <span className="teacher-muted">[{step.entry_type}]</span>}{' '}
+              {stepContentText(step.content)}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function QuestionText({ problem }: { problem: AuthoredProblemResult }) {
+  if (!problem.problem_text) {
+    return (
+      <p className="text-xs teacher-muted italic">
+        Question text unavailable for this problem.
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-xl teacher-panel-soft px-3 py-2">
+      <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</div>
+      <p className="mt-1 whitespace-pre-wrap text-sm">
+        {problem.problem_text}
+        {problem.problem_text_truncated ? '…' : ''}
+      </p>
+    </div>
+  );
+}
+
 function ProblemRow({
   problem,
-  approving,
+  approveState,
   onApprove,
+  onGoToConcepts,
 }: {
   problem: AuthoredProblemResult;
-  approving: boolean;
+  approveState: ApproveState | undefined;
   onApprove: (reference: 'ocr' | 'generated') => void;
+  onGoToConcepts?: () => void;
 }) {
   const title = problem.label ? `Problem ${problem.label}` : 'Problem';
   const conf =
     problem.ocr_confidence != null ? ` · OCR ${(problem.ocr_confidence * 100).toFixed(0)}%` : '';
+  const outcome = effectiveOutcome(problem, approveState);
 
-  if (problem.outcome === 'promoted') {
+  if (outcome === 'promoted') {
+    const approvedByTeacher =
+      approveState?.status === 'approved' || Boolean(problem.review?.approved_reference);
     return (
       <div className="flex items-center gap-2 rounded-xl teacher-panel-soft px-3 py-2 text-sm">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
         <span className="font-medium">{title}</span>
-        <span className="teacher-muted">promoted ({problem.solution_source}{conf})</span>
+        <span className="teacher-muted">
+          {approvedByTeacher
+            ? 'approved — now teachable'
+            : `promoted (${problem.solution_source}${conf})`}
+        </span>
       </div>
     );
   }
 
-  if (problem.outcome === 'rejected') {
+  if (outcome === 'rejected') {
     return (
       <div className="flex items-center gap-2 rounded-xl teacher-panel-soft px-3 py-2 text-sm">
         <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
@@ -435,35 +603,129 @@ function ProblemRow({
     );
   }
 
-  // held_for_review — teacher chooses which reference to promote.
+  // held_for_review
+  const reason = problem.review?.reason ?? problem.reason;
+  const pending = approveState?.status === 'pending';
+
+  // A no_matching_concept hold stores NO draft — the backend 409s any approve.
+  // Render guidance instead of buttons that can only fail.
+  if (reason === 'no_matching_concept') {
+    return (
+      <div className="rounded-xl teacher-alert teacher-alert--warning px-3 py-2.5 text-sm flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="font-medium">{title}</span>
+          <span className="teacher-muted">held · {holdReasonLabel(reason)}</span>
+        </div>
+        <QuestionText problem={problem} />
+        <p className="text-xs teacher-muted">
+          This question didn&apos;t match any concept in your course list, so no solution was
+          drafted. Add the missing concept in the Concepts section, then re-upload this set.
+        </p>
+        {onGoToConcepts && (
+          <button
+            type="button"
+            onClick={onGoToConcepts}
+            className="teacher-button-secondary self-start rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Go to Concepts
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Slot-driven approve buttons: one button per draft actually stored, labeled
+  // by the draft's real nature. ocr_draft is "the draft that came through the
+  // pipeline" — on problem-only uploads that is the AI-GENERATED draft
+  // (solution_source: "generated"); generated_alt exists only on the extracted
+  // path. Never render a button for an absent slot (it can only 422).
+  const review = problem.review;
+  const buttons: { reference: 'ocr' | 'generated'; label: string; draft: ReviewDraft | null }[] = [];
+  if (review) {
+    if (review.ocr_draft) {
+      buttons.push({
+        reference: 'ocr',
+        label:
+          review.ocr_draft.solution_source === 'generated'
+            ? 'Approve generated solution'
+            : 'Approve extracted solution (OCR)',
+        draft: review.ocr_draft,
+      });
+    }
+    if (review.generated_alt) {
+      buttons.push({
+        reference: 'generated',
+        label: 'Approve AI-generated alternative',
+        draft: review.generated_alt,
+      });
+    }
+  } else {
+    // Old response shape (backend not yet deployed): no slot info. reason is
+    // still present, so a generated-draft hold gets its one valid button; only
+    // genuine extracted-path holds keep both legacy choices.
+    buttons.push({ reference: 'ocr', label: 'Approve pipeline draft', draft: null });
+    if (reason !== 'generated_no_match') {
+      buttons.push({ reference: 'generated', label: 'Use AI-generated', draft: null });
+    }
+  }
+
   return (
     <div className="rounded-xl teacher-alert teacher-alert--warning px-3 py-2.5 text-sm flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 shrink-0" />
         <span className="font-medium">{title}</span>
-        <span className="teacher-muted">held for review · {problem.reason || 'needs a decision'}{conf}</span>
+        <span className="teacher-muted">held · {holdReasonLabel(reason)}{conf}</span>
       </div>
-      <p className="text-xs teacher-muted">
-        Choose which reference solution to promote as teachable.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={approving}
-          onClick={() => onApprove('ocr')}
-          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-        >
-          {approving ? 'Approving…' : 'Use extracted (OCR)'}
-        </button>
-        <button
-          type="button"
-          disabled={approving}
-          onClick={() => onApprove('generated')}
-          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-        >
-          {approving ? 'Approving…' : 'Use AI-generated'}
-        </button>
-      </div>
+      <QuestionText problem={problem} />
+      {buttons.map(
+        (button) =>
+          button.draft && (
+            <DraftPreview
+              key={`draft-${button.reference}`}
+              heading={
+                button.reference === 'generated'
+                  ? 'AI-generated alternative'
+                  : button.draft.solution_source === 'generated'
+                    ? 'AI-drafted solution'
+                    : 'Extracted (OCR) solution'
+              }
+              draft={button.draft}
+            />
+          ),
+      )}
+      {buttons.length === 0 && (
+        <p className="text-xs teacher-muted">
+          No stored draft to approve — delete this set and re-upload it.
+        </p>
+      )}
+      {approveState?.status === 'error' && (
+        <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+          {approveState.message}
+        </div>
+      )}
+      {buttons.length > 0 && (
+        <>
+          <p className="text-xs teacher-muted">
+            Approving promotes the solution so students can teach this problem back.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {buttons.map((button) => (
+              <button
+                key={button.reference}
+                type="button"
+                disabled={pending}
+                onClick={() => onApprove(button.reference)}
+                className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+                {pending ? 'Approving…' : button.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

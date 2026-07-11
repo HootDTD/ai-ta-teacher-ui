@@ -1036,7 +1036,11 @@ export default function TeacherConsole() {
                       Upload paired problem and solution PDFs. Hoot extracts and validates each problem for you.
                     </p>
                   </header>
-                  <AuthoredSetsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
+                  <AuthoredSetsPanel
+                    searchSpaceId={selectedClassId}
+                    accessToken={accessToken}
+                    onGoToConcepts={() => setActiveSection('concepts')}
+                  />
                 </div>
               )}
 
