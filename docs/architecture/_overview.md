@@ -5,13 +5,14 @@ owns:
   - "*.{ts,mjs,json}"
   - app/layout.tsx
   - app/globals.css
+  - app/components/**
   - app/lib/**
   - public/**
 related:
   - ai-ta-teacher-ui/pages
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-06-10
+last_verified: 2026-07-12
 stub: false
 ---
 
@@ -27,6 +28,7 @@ stub: false
 | `app/layout.tsx` | Root layout. Metadata: title "Hoot Teacher Console", description "Upload weekly notes and slides for AI-TA context." Renders `<body className="antialiased">{children}</body>`, imports `./globals.css`. No providers, no fonts loaded. |
 | `app/globals.css` | `@import "tailwindcss"` + the entire design system as CSS custom properties on `:root` (light, warm beige palette `#e9dfcf`) and `html.dark` (dark overrides). Defines all `teacher-*` utility classes (see Non-obvious conventions). |
 | `app/lib/auth.ts` | The only `app/lib/` module. Hand-rolled Supabase GoTrue client (no `@supabase/supabase-js` dependency) — see Public interfaces. |
+| `app/components/*.tsx` | Client-side console sections and navigation, including `ConceptsPanel`, authored-set review, and generated-problem run review. They use raw `fetch`, local hook state, and semantic `teacher-*` CSS classes. |
 | `public/*.svg` | Default create-next-app assets (file, globe, next, vercel, window); not referenced by app code. |
 | `.env` | Local env file defining the four vars below. |
 | `.github/workflows/ci.yml` | CI on push/PR to `main`/`staging`: Node 20, `npm ci` → `npm run lint` → `npm run build`; aggregation job `ci-passed` is the single required status (Railway "Wait for CI" gate). |
@@ -65,14 +67,14 @@ Environment variables (all four declared in `.env`):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client | `apikey` header for GoTrue calls. |
 | `NEXT_PUBLIC_STUDENT_APP_URL` | client | Base URL used in `app/page.tsx` to build **student** invite URLs (`{studentApp}/join/{code}`); falls back to `window.location.origin`. Teacher invite URLs always use this app's own origin. |
 
-Exact backend (port 8000) endpoints reached via the proxies: `POST /ask`, `POST /chats/{chat_id}`, `GET|POST /classes`, `GET /my-classes`, `GET|POST /invite-links`, `DELETE /invite-links/{id}`, `GET /invite-links/resolve/{code}`, `POST /invite-links/redeem/{code}`, `GET /teacher/weeks`, `POST /teacher/weeks/current`, `POST /teacher/upload` (multipart — flows into backend indexing pipeline), `POST /teacher/uploads/{id}/retry`, `GET|POST /teacher/retrieval-weights`, `GET /reports/ai-use/{id}`, `POST /reports/ai-use/{chat_id}`, `GET /reports/ai-use/{id}.pdf`.
+Exact backend (port 8000) endpoint inventory is maintained in `ai-ta-teacher-ui/pages`; it includes the `/apollo/problem-generation/**` seed, variant-run, run-detail, and approval endpoints used by the generated-problem review surface.
 
 ## Non-obvious conventions
 
 - **Port 3002** for dev (`-p 3002`); student UI is 3001, backend 8000. The README says 3001 — it's wrong/stale for this repo.
 - **BFF proxy pattern, no rewrites**: every backend call has a thin pass-through route handler in `app/api/**`. Handlers strip nothing and add nothing except forwarding the `Authorization` header; most read `resp.text()` and re-wrap with `Cache-Control: no-store`. New backend endpoints need a new proxy file.
 - **Theming**: dark mode = `html.dark` class toggled client-side, persisted in `localStorage` key `theme`, with a transient `theme-transition` class for animated switches (handled inside `app/page.tsx`, not the layout). All colors are CSS vars; components use semantic classes `teacher-shell`, `teacher-panel[-soft|-subtle]`, `teacher-input`, `teacher-button-primary|secondary`, `teacher-alert--danger|success|warning`, `teacher-pill--*`, `teacher-prose`, `header-menu*` defined in `globals.css`, mixed with Tailwind utilities for layout.
-- **No shared components directory** — all UI is defined inline inside the three page files; `app/lib/auth.ts` is the only shared module.
+- **Console section components** live under `app/components/`; they remain dependency-light and use local hooks/raw fetch rather than a component, data-fetching, or state library.
 - **Error handling convention**: route handlers pass backend status/body through untouched; pages parse error bodies as `{ detail }` (FastAPI style) with text fallback.
 - **No tests** in this repo; CI is lint + build only.
 
