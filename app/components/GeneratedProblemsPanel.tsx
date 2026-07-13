@@ -52,7 +52,7 @@ type GeneratedProblem = {
     qualitative_rubric?: {
       claims: { claim: string; supported: boolean; note?: string | null }[];
       unsupported_count: number;
-      ceiling: number;
+      ceiling: string;
     } | null;
     authored_review: { required: boolean };
     ocr_draft: {
@@ -67,7 +67,8 @@ type RunDetail = GenerationRun & {
     llm_calls: number;
     llm_tokens_in: number;
     llm_tokens_out: number;
-    llm_cost_usd: number;
+    // Serialized Decimal — the backend sends this as a string.
+    llm_cost_usd: string;
   } | null;
   result_summary: {
     dropped?: Record<string, number>;
@@ -350,7 +351,7 @@ export default function GeneratedProblemsPanel({
                   )}
                   {detail?.ingest_run && (
                     <p className="text-xs teacher-muted">
-                      LLM cost ${detail.ingest_run.llm_cost_usd.toFixed(4)} ·{' '}
+                      LLM cost ${Number(detail.ingest_run.llm_cost_usd).toFixed(4)} ·{' '}
                       {detail.ingest_run.llm_calls.toLocaleString()} calls ·{' '}
                       {detail.ingest_run.llm_tokens_in.toLocaleString()} input tokens ·{' '}
                       {detail.ingest_run.llm_tokens_out.toLocaleString()} output tokens
