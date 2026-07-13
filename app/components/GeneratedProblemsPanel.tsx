@@ -13,6 +13,10 @@ import {
 
 type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
+function droppedTotal(dropped: Record<string, number> | null | undefined): number {
+  return Object.values(dropped ?? {}).reduce((sum, count) => sum + count, 0);
+}
+
 type GenerationRun = {
   run_id: number;
   concept_id: number;
@@ -20,7 +24,9 @@ type GenerationRun = {
   created_at: string;
   requested: number;
   written_count: number;
-  dropped: number;
+  // Per-drop-reason counts, e.g. {leaked: 1, duplicate: 2}; may be absent
+  // while the run is still pending.
+  dropped?: Record<string, number> | null;
 };
 
 type DraftStep = {
@@ -322,7 +328,7 @@ export default function GeneratedProblemsPanel({
                     <span className="block text-sm font-semibold">Run {run.run_id}</span>
                     <span className="mt-0.5 block text-xs teacher-muted">
                       {createdAtLabel(run.created_at)} · {run.requested} requested ·{' '}
-                      {run.written_count} written · {run.dropped} dropped
+                      {run.written_count} written · {droppedTotal(run.dropped)} dropped
                     </span>
                   </span>
                 </span>
