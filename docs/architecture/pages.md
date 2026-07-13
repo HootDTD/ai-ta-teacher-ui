@@ -10,17 +10,17 @@ related:
   - ai-ta-teacher-ui/_overview
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-07-11
+last_verified: 2026-07-12
 stub: false
 ---
 
 ## Module map and file landmarks
 
-Three UI routes (all `"use client"` single-file pages, no shared components) plus 14 API proxy routes:
+Three UI routes plus their client components and thin API proxy routes:
 
 | Route | File | Purpose |
 |-------|------|---------|
-| `/` | `app/page.tsx` (~1250 lines, `TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, a course-wide textbook card, and weekly notes/slides PDF uploads with status polling. Entry states (auth bootstrap, sign-in card, config error) use the shared `.auth-screen`/`.auth-card`/`.boot-screen` design (owl video + Fraunces "Hoot" wordmark, loaded via `next/font` in `app/layout.tsx`); inline loading rows show a `boot-screen__bar` shimmer. **Apollo-only mode** (`NEXT_PUBLIC_APOLLO_ONLY=1`, `app/lib/flags.ts`, build-time inlined — pilot prod on, staging off) hides the Hoot-specific sidebar sections `ai-tuning` (retrieval weights) and `reports` (AI-use reports); Materials/Concepts/Problem Sets/Invites stay since they feed Apollo provisioning. |
+| `/` | `app/page.tsx` (`TeacherConsole`) | Main console: sign-in, class create/select, current-week control, invite links, retrieval weights, uploads, concept authoring, authored problem-set review, and generated-problem review. `ConceptsPanel` starts variant runs from selected teachable seed problems; `GeneratedProblemsPanel` polls active runs, displays validation/provenance, and approves reference solutions. **Apollo-only mode** (`NEXT_PUBLIC_APOLLO_ONLY=1`, `app/lib/flags.ts`, build-time inlined — pilot prod on, staging off) hides only the Hoot-specific `ai-tuning` and `reports` sections; Materials/Concepts/Problem Sets/Generated Problems/Invites remain visible because they feed Apollo. |
 | `/join/[code]` | `app/join/[code]/page.tsx` (`JoinPage`) | Teacher invite redemption: resolve code → auth → auto-redeem → redirect to `/`. All branches render on the shared entry-screen design; the brand subtitle is role-aware (`student` invites show "AI Teaching Assistant"). |
 | `/report/[id]` | `app/report/[id]/page.tsx` (`ReportPage`) | AI-use report viewer: markdown render + copy / .md / .json / PDF export. |
 
@@ -46,6 +46,11 @@ All `app/api/**` files are thin pass-through proxies (`export const runtime = 'n
 | `app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts` (POST) | `POST /apollo/authored-sets/{set_id}/problems/{problem_id}/approve` |
 | `app/api/teacher/concepts/route.ts` (GET, POST) | `GET /apollo/teacher/concepts?search_space_id=`, `POST /apollo/teacher/concepts` — WU-TCA concept authoring, consumed by the console's Concepts section (`app/components/ConceptsPanel.tsx`) |
 | `app/api/teacher/concepts/[concept_id]/route.ts` (PATCH, DELETE) | `PATCH|DELETE /apollo/teacher/concepts/{concept_id}` |
+| `app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts` (GET) | `GET /apollo/problem-generation/concepts/{concept_id}/seeds` |
+| `app/api/teacher/problem-generation/concepts/[concept_id]/variants/route.ts` (POST) | `POST /apollo/problem-generation/concepts/{concept_id}/variants` |
+| `app/api/teacher/problem-generation/runs/route.ts` (GET) | `GET /apollo/problem-generation/runs?search_space_id=` |
+| `app/api/teacher/problem-generation/runs/[run_id]/route.ts` (GET) | `GET /apollo/problem-generation/runs/{run_id}` |
+| `app/api/teacher/problem-generation/problems/[problem_id]/approve/route.ts` (POST) | `POST /apollo/problem-generation/problems/{problem_id}/approve` |
 | `app/api/reports/ai-use/[id]/route.ts` (GET, POST) | `GET /reports/ai-use/{id}`; POST creates a report where `[id]` is the **chat_id** |
 | `app/api/reports/ai-use/[id]/pdf/route.ts` (GET) | `GET /reports/ai-use/{id}.pdf` (sets `Content-Disposition: attachment`) |
 
@@ -67,6 +72,7 @@ Note: `/api/ask`, `/api/chats/[chat_id]`, and the report-creation POST are not c
 6. **Invite links** (`/`): one active link per role (student/teacher). Generate/Regenerate → `POST /api/invite-links {search_space_id, role}`; Revoke → `DELETE /api/invite-links/{id}`; Copy builds URL `{base}/join/{code}` where base = `NEXT_PUBLIC_STUDENT_APP_URL` for student links, `window.location.origin` for teacher links.
 7. **Join via invite** (`/join/[code]`): unauthenticated `GET /api/invite-links/resolve/{code}` shows course name (or "Invalid Invite Link"); once a session exists and the link resolved, a `useEffect` auto-fires `POST /api/invite-links/redeem/{code}` with Bearer token; on `success` shows "You're in!" and `router.push('/')` after 1.5s.
 8. **View AI-use report** (`/report/[id]`): requires session → `GET /api/reports/ai-use/{id}` → renders `data.markdown` via `<ReactMarkdown>` inside `.teacher-prose`; warning banner if `jsonld.evidence.truncated`; "Prompts log" section extracts `(#turn-N)` anchors from the markdown (first 12 unique) as in-page links; sidebar shows chat_id, created_at, `model_fingerprint`, `prompt_hashes`. Exports: Copy / Blob-download .md / .json client-side; PDF via `GET /api/reports/ai-use/{id}/pdf` (uses `alert()` on failure).
+9. **Generate and review problem variants** (`/`, Concepts → Generated Problems): expanding "Generate variants" loads tier-2 seed problems, starts a generation run with selected seed ids and a count from 1–10, then navigates to the generated-runs review surface. `GeneratedProblemsPanel` polls every 4s while a run is pending/running, lazily loads run details, presents provenance, round-trip and qualitative checks, cost/drop metadata, and posts `{reference: 'ocr'}` approvals. Approval success depends on the response's `promoted` field, not HTTP 200 alone. A 404 runs endpoint or generation endpoint is a quiet deployment-availability state; a 403 generation response uses deployment-disabled copy.
 
 ## State
 

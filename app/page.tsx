@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   MoreVertical,
+  Sparkles,
 } from 'lucide-react';
 import {
   SUPABASE_AUTH_ENABLED,
@@ -42,6 +43,7 @@ import {
 } from './lib/teacher';
 import AuthoredSetsPanel from './components/AuthoredSetsPanel';
 import ConceptsPanel from './components/ConceptsPanel';
+import GeneratedProblemsPanel from './components/GeneratedProblemsPanel';
 import { APOLLO_ONLY } from './lib/flags';
 import TeacherSidebar, { type SectionKey } from './components/TeacherSidebar';
 import MaterialsSection from './components/MaterialsSection';
@@ -58,6 +60,7 @@ const ALL_SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] 
   { key: 'materials', label: 'Materials', icon: BookOpen },
   { key: 'concepts', label: 'Concepts', icon: Lightbulb },
   { key: 'problem-sets', label: 'Problem Sets', icon: ListChecks },
+  { key: 'generated-problems', label: 'Generated Problems', icon: Sparkles },
   { key: 'ai-tuning', label: 'AI Tuning', icon: SlidersHorizontal },
   { key: 'invites', label: 'Invites', icon: Link2 },
   { key: 'reports', label: 'Reports', icon: FileText },
@@ -1024,7 +1027,14 @@ export default function TeacherConsole() {
                       matched against this list.
                     </p>
                   </header>
-                  <ConceptsPanel searchSpaceId={selectedClassId} accessToken={accessToken} />
+                  <ConceptsPanel
+                    searchSpaceId={selectedClassId}
+                    accessToken={accessToken}
+                    onGoToGenerated={() => {
+                      setFlash('Generation started');
+                      setActiveSection('generated-problems');
+                    }}
+                  />
                 </div>
               )}
 
@@ -1037,6 +1047,25 @@ export default function TeacherConsole() {
                     </p>
                   </header>
                   <AuthoredSetsPanel
+                    searchSpaceId={selectedClassId}
+                    accessToken={accessToken}
+                    onGoToConcepts={() => setActiveSection('concepts')}
+                  />
+                </div>
+              )}
+
+              {activeSection === 'generated-problems' && (
+                <div className="space-y-6">
+                  <header className="space-y-1">
+                    <h1 className="text-2xl font-semibold teacher-section-title">
+                      Generated problems
+                    </h1>
+                    <p className="text-sm teacher-muted">
+                      Inspect AI-generated variants and approve their reference solutions before
+                      students can teach them back.
+                    </p>
+                  </header>
+                  <GeneratedProblemsPanel
                     searchSpaceId={selectedClassId}
                     accessToken={accessToken}
                     onGoToConcepts={() => setActiveSection('concepts')}
