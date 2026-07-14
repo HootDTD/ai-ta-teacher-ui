@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Pencil,
   RefreshCcw,
+  Save,
   Sparkles,
 } from 'lucide-react';
 
@@ -29,22 +31,25 @@ type GenerationRun = {
   dropped?: Record<string, number> | null;
 };
 
-type DraftStep = {
-  step?: number;
-  entry_type?: string;
-  id?: string;
-  content?: Record<string, unknown>;
+type ReferenceStep = {
+  step: number;
+  entry_type: 'equation' | 'definition' | 'condition' | 'simplification' | 'variable_mapping' | 'procedure_step';
+  id: string;
+  content: Record<string, unknown>;
+  depends_on: string[];
+  entity_key?: string | null;
 };
 
 type GeneratedProblem = {
   concept_problem_id: number;
   problem_text: string;
+  problem_text_truncated: boolean;
   difficulty: string;
   tier: number;
   review: {
-    variation_operator: string;
-    aig_seed_id: number;
-    model: string;
+    variation_operator: string | null;
+    aig_seed_id: number | null;
+    model: string | null;
     round_trip: {
       verdict: 'verified' | 'unresolved' | 'inapplicable';
       diagnostic?: string | null;
@@ -56,10 +61,42 @@ type GeneratedProblem = {
     } | null;
     authored_review: { required: boolean };
     ocr_draft: {
-      solution_source?: string | null;
-      reference_solution?: DraftStep[] | null;
+      solution_source: string | null;
+      reference_solution: ReferenceStep[] | null;
     } | null;
   };
+};
+
+type ProblemEditRequest = {
+  problem_text?: string;
+  reference_solution?: { id: string; content: Record<string, unknown> }[];
+};
+
+type EditedProblemResponse = {
+  concept_problem_id: number;
+  problem_text: string;
+  problem_text_truncated: boolean;
+  reference_solution?: ReferenceStep[] | null;
+  solution_text?: string;
+  review: {
+    required: boolean;
+    reason: string | null;
+    approved_reference: string | null;
+    augmented: string | null;
+    ocr_draft?: {
+      solution_source: string | null;
+      reference_solution: ReferenceStep[] | null;
+    } | null;
+    generated_alt?: {
+      solution_source: string | null;
+      reference_solution: ReferenceStep[] | null;
+    } | null;
+  } | null;
+};
+
+type ProblemEditOverlay = {
+  problem_text: string;
+  reference_solution?: ReferenceStep[];
 };
 
 type RunDetail = GenerationRun & {
@@ -129,6 +166,7 @@ export default function GeneratedProblemsPanel({
   const [details, setDetails] = useState<Record<number, RunDetail>>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [approveState, setApproveState] = useState<Record<number, ApproveState>>({});
+  const [editOverlays, setEditOverlays] = useState<Record<number, ProblemEditOverlay>>({});
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,7 +211,7 @@ export default function GeneratedProblemsPanel({
   const fetchDetail = useCallback(
     async (runId: number) => {
       try {
-        const resp = await fetch(`/api/teacher/problem-generation/runs/${runId}`, {
+        const resp = await fetch(`/api/teacher/problem-generation/runs/${runId}?full_text=1`, {
           headers: authHeaders(),
         });
         if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Failed to load run detail'));
@@ -192,6 +230,7 @@ export default function GeneratedProblemsPanel({
     setDetails({});
     setExpandedId(null);
     setApproveState({});
+    setEditOverlays({});
     setAvailable(true);
     setError(null);
     setLoading(true);
@@ -255,6 +294,31 @@ export default function GeneratedProblemsPanel({
         },
       }));
     }
+  };
+
+  const handleEdit = async (
+    runId: number,
+    problemId: number,
+    request: ProblemEditRequest,
+  ): Promise<EditedProblemResponse> => {
+    const resp = await fetch(`/api/teacher/problems/${problemId}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Save failed'));
+    const updated: EditedProblemResponse = await resp.json();
+    await fetchDetail(runId);
+    setEditOverlays((current) => ({
+      ...current,
+      [problemId]: {
+        problem_text: updated.problem_text,
+        ...(Array.isArray(updated.reference_solution)
+          ? { reference_solution: updated.reference_solution }
+          : {}),
+      },
+    }));
+    return updated;
   };
 
   if (!available) {
@@ -373,7 +437,11 @@ export default function GeneratedProblemsPanel({
                       <GeneratedProblemCard
                         key={problem.concept_problem_id}
                         problem={problem}
+                        editOverlay={editOverlays[problem.concept_problem_id]}
                         approveState={approveState[problem.concept_problem_id]}
+                        onSave={(request) =>
+                          handleEdit(run.run_id, problem.concept_problem_id, request)
+                        }
                         onApprove={() =>
                           void handleApprove(run.run_id, problem.concept_problem_id)
                         }
@@ -392,16 +460,84 @@ export default function GeneratedProblemsPanel({
 
 function GeneratedProblemCard({
   problem,
+  editOverlay,
   approveState,
   onApprove,
+  onSave,
 }: {
   problem: GeneratedProblem;
+  editOverlay: ProblemEditOverlay | undefined;
   approveState: ApproveState | undefined;
   onApprove: () => void;
+  onSave: (request: ProblemEditRequest) => Promise<EditedProblemResponse>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editProblemText, setEditProblemText] = useState('');
+  const [editSteps, setEditSteps] = useState<ReferenceStep[]>([]);
+  const [editPending, setEditPending] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const review = problem.review;
   const approved = approveState?.status === 'approved' || review.authored_review.required === false;
   const pending = approveState?.status === 'pending';
+  const displayedProblemText = editOverlay?.problem_text ?? problem.problem_text;
+  const displayedSteps =
+    editOverlay?.reference_solution ?? review.ocr_draft?.reference_solution ?? [];
+  const editableSteps = approved ? displayedSteps : [];
+
+  const beginEdit = () => {
+    setEditProblemText(displayedProblemText);
+    setEditSteps(cloneReferenceSteps(editableSteps));
+    setEditError(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditProblemText(displayedProblemText);
+    setEditSteps(cloneReferenceSteps(editableSteps));
+    setEditError(null);
+  };
+
+  const updateStepString = (stepIndex: number, key: string, value: string) => {
+    setEditSteps((current) =>
+      current.map((step, index) =>
+        index === stepIndex
+          ? { ...step, content: { ...step.content, [key]: value } }
+          : step,
+      ),
+    );
+  };
+
+  const saveEdit = async () => {
+    setEditPending(true);
+    setEditError(null);
+    try {
+      const request: ProblemEditRequest = {};
+      if (editProblemText !== displayedProblemText) {
+        request.problem_text = editProblemText;
+      }
+      if (approved) {
+        const originalStepEdits = displayedSteps.map((step) => ({
+          id: step.id,
+          content: step.content,
+        }));
+        const nextStepEdits = editSteps.map((step) => ({ id: step.id, content: step.content }));
+        if (JSON.stringify(nextStepEdits) !== JSON.stringify(originalStepEdits)) {
+          request.reference_solution = nextStepEdits;
+        }
+      }
+      if (request.problem_text == null && request.reference_solution == null) {
+        setEditing(false);
+        return;
+      }
+      await onSave(request);
+      setEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setEditPending(false);
+    }
+  };
 
   return (
     <div
@@ -423,23 +559,56 @@ function GeneratedProblemCard({
         </span>
         <RoundTripBadge roundTrip={review.round_trip} />
         {approved && <span className="text-xs teacher-muted">Approved · now teachable</span>}
+        <button
+          type="button"
+          aria-expanded={editing}
+          aria-label={
+            editing
+              ? `Cancel editing problem ${problem.concept_problem_id}`
+              : `Edit problem ${problem.concept_problem_id}`
+          }
+          title={editing ? 'Cancel editing' : 'Edit problem'}
+          disabled={editPending}
+          onClick={editing ? cancelEdit : beginEdit}
+          className="teacher-button-secondary ml-auto shrink-0 rounded-lg p-1.5 disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      <div className="rounded-xl teacher-panel-soft px-3 py-2">
-        <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</div>
-        <p className="mt-1 whitespace-pre-wrap text-sm">{problem.problem_text}</p>
-      </div>
+      {editing ? (
+        <GeneratedProblemEditFields
+          problemId={problem.concept_problem_id}
+          problemText={editProblemText}
+          steps={editSteps}
+          canEditSteps={approved}
+          pending={editPending}
+          error={editError}
+          questionMayBeTruncated={!editOverlay && problem.problem_text_truncated}
+          onProblemTextChange={setEditProblemText}
+          onStepStringChange={updateStepString}
+          onSave={() => void saveEdit()}
+          onCancel={cancelEdit}
+        />
+      ) : (
+        <>
+          <div className="rounded-xl teacher-panel-soft px-3 py-2">
+            <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</div>
+            <p className="mt-1 whitespace-pre-wrap text-sm">{displayedProblemText}</p>
+          </div>
+          {displayedSteps.length > 0 && (
+            <ReferenceSolutionPreview steps={displayedSteps} />
+          )}
+        </>
+      )}
 
       <p className="text-xs teacher-muted">
-        {review.variation_operator.replace(/_/g, ' ')} · seed {review.aig_seed_id} · {review.model}
+        {(review.variation_operator ?? 'unknown operator').replace(/_/g, ' ')} · seed{' '}
+        {review.aig_seed_id ?? 'unknown'} · {review.model ?? 'unknown model'}
       </p>
 
       {review.qualitative_rubric && (
         <QualitativeRubric rubric={review.qualitative_rubric} />
-      )}
-
-      {review.ocr_draft && (
-        <DraftPreview draft={review.ocr_draft} />
       )}
 
       {approveState?.status === 'error' && (
@@ -535,37 +704,164 @@ function QualitativeRubric({
   );
 }
 
-function stepContentText(content?: Record<string, unknown>): string {
-  if (!content || typeof content !== 'object') return '';
+function stepContentText(content: Record<string, unknown>): string {
   return Object.entries(content)
     .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
     .join(' · ');
 }
 
-function DraftPreview({
-  draft,
-}: {
-  draft: NonNullable<GeneratedProblem['review']['ocr_draft']>;
-}) {
-  const steps = Array.isArray(draft.reference_solution) ? draft.reference_solution : [];
+function cloneReferenceSteps(steps: ReferenceStep[]): ReferenceStep[] {
+  return steps.map((step) => ({
+    ...step,
+    content: { ...step.content },
+    depends_on: [...step.depends_on],
+  }));
+}
+
+function ReferenceSolutionPreview({ steps }: { steps: ReferenceStep[] }) {
   return (
     <div className="rounded-xl teacher-panel-soft px-3 py-2">
       <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
-        Reference solution {draft.solution_source ? `· ${draft.solution_source}` : ''}
+        Reference solution
       </div>
       {steps.length === 0 ? (
         <p className="mt-1 text-xs teacher-muted">No reference-solution steps recorded.</p>
       ) : (
         <ol className="mt-1 flex flex-col gap-1">
           {steps.map((step, index) => (
-            <li key={step.id ?? index} className="text-xs leading-relaxed">
-              <span className="font-semibold">{step.step ?? index + 1}.</span>{' '}
-              {step.entry_type && <span className="teacher-muted">[{step.entry_type}]</span>}{' '}
+            <li key={step.id || index} className="text-xs leading-relaxed">
+              <span className="font-semibold">{step.step || index + 1}.</span>{' '}
+              <span className="teacher-muted">[{step.entry_type}]</span>{' '}
               {stepContentText(step.content)}
             </li>
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+function GeneratedProblemEditFields({
+  problemId,
+  problemText,
+  steps,
+  canEditSteps,
+  pending,
+  error,
+  questionMayBeTruncated,
+  onProblemTextChange,
+  onStepStringChange,
+  onSave,
+  onCancel,
+}: {
+  problemId: number;
+  problemText: string;
+  steps: ReferenceStep[];
+  canEditSteps: boolean;
+  pending: boolean;
+  error: string | null;
+  questionMayBeTruncated: boolean;
+  onProblemTextChange: (value: string) => void;
+  onStepStringChange: (stepIndex: number, key: string, value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label htmlFor={`generated-problem-${problemId}-question-edit`} className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</span>
+        <textarea
+          id={`generated-problem-${problemId}-question-edit`}
+          required
+          rows={5}
+          value={problemText}
+          disabled={pending}
+          onChange={(event) => onProblemTextChange(event.target.value)}
+          className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+        />
+      </label>
+      {questionMayBeTruncated && (
+        <div className="rounded-xl teacher-alert teacher-alert--warning px-3 py-2 text-xs">
+          This generation run returned only the first 2,000 question characters. Editing the
+          question may replace text that is not shown; solution-step-only edits leave it unchanged.
+        </div>
+      )}
+
+      {!canEditSteps && (
+        <p className="text-xs teacher-muted">
+          Solution steps become editable after approval.
+        </p>
+      )}
+
+      {canEditSteps && steps.length > 0 && (
+        <div className="rounded-xl teacher-panel-soft px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Reference solution
+          </div>
+          <div className="mt-2 flex flex-col gap-3">
+            {steps.map((step, stepIndex) => (
+              <div key={step.id} className="rounded-xl teacher-panel-subtle p-3">
+                <p className="text-xs font-semibold">
+                  Step {step.step} <span className="teacher-muted">[{step.entry_type}] · {step.id}</span>
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {Object.entries(step.content).map(([key, value], contentIndex) => {
+                    const fieldId = `generated-problem-${problemId}-step-${stepIndex}-content-${contentIndex}`;
+                    if (typeof value === 'string') {
+                      return (
+                        <label key={key} htmlFor={fieldId} className="flex flex-col gap-1">
+                          <span className="text-xs teacher-muted">{key.replace(/_/g, ' ')}</span>
+                          <textarea
+                            id={fieldId}
+                            rows={2}
+                            value={value}
+                            disabled={pending}
+                            onChange={(event) =>
+                              onStepStringChange(stepIndex, key, event.target.value)
+                            }
+                            className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+                          />
+                        </label>
+                      );
+                    }
+                    return (
+                      <div key={key} className="text-xs teacher-muted">
+                        <span className="font-semibold">{key.replace(/_/g, ' ')}:</span>{' '}
+                        {JSON.stringify(value)} <span className="italic">(read-only)</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-2 text-xs">
+          {error}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending || !problemText.trim()}
+          onClick={onSave}
+          className="teacher-button-primary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {pending ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {pending ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onCancel}
+          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
