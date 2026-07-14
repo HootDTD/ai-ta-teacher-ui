@@ -12,10 +12,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ set_id: string 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (authHeader) headers.Authorization = authHeader;
   const { set_id } = await ctx.params;
-  const resp = await fetch(`${backend}/apollo/authored-sets/${encodeURIComponent(set_id)}`, {
-    headers,
-    cache: 'no-store',
-  });
+  const fullText = new URL(req.url).searchParams.get('full_text');
+  const fullTextQuery =
+    fullText == null ? '' : `?full_text=${encodeURIComponent(fullText)}`;
+  const resp = await fetch(
+    `${backend}/apollo/authored-sets/${encodeURIComponent(set_id)}${fullTextQuery}`,
+    {
+      headers,
+      cache: 'no-store',
+    },
+  );
 
   return new Response(resp.body, {
     status: resp.status,

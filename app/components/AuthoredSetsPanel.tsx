@@ -1,7 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from 'react';
-import { UploadCloud, RefreshCcw, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, Trash2, BookOpen } from 'lucide-react';
+import {
+  AlertTriangle,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  RefreshCcw,
+  Save,
+  Trash2,
+  UploadCloud,
+  XCircle,
+} from 'lucide-react';
 
 type AuthoredStatus = 'pending' | 'indexing' | 'provisioning' | 'done' | 'failed';
 
@@ -13,16 +25,18 @@ type AuthoredSetSummary = {
   solution_document_id: number | null;
 };
 
-type DraftStep = {
-  step?: number;
-  entry_type?: string;
-  id?: string;
-  content?: Record<string, unknown>;
+type ReferenceStep = {
+  step: number;
+  entry_type: 'equation' | 'definition' | 'condition' | 'simplification' | 'variable_mapping' | 'procedure_step';
+  id: string;
+  content: Record<string, unknown>;
+  depends_on: string[];
+  entity_key?: string | null;
 };
 
 type ReviewDraft = {
-  solution_source?: string | null;
-  reference_solution?: DraftStep[] | null;
+  solution_source: string | null;
+  reference_solution: ReferenceStep[] | null;
 };
 
 // Whitelisted projection of the backend's provenance.authored_review; absent on
@@ -31,6 +45,7 @@ type ProblemReview = {
   required?: boolean;
   reason?: string | null;
   approved_reference?: string | null;
+  augmented?: string | null;
   ocr_draft?: ReviewDraft | null;
   generated_alt?: ReviewDraft | null;
 };
@@ -41,14 +56,18 @@ type AuthoredProblemResult = {
   solution_source: string | null;
   match_method: string | null;
   ocr_confidence: number | null;
-  failed_gate: number | null;
-  diagnostic: string;
+  failed_gate?: number | null;
+  diagnostic?: string;
   review_required: boolean;
   reason: string | null;
   concept_problem_id: number | null;
   problem_text?: string;
   problem_text_truncated?: boolean;
+  reference_solution?: ReferenceStep[] | null;
+  solution_text?: string;
   review?: ProblemReview | null;
+  rejected_problem_id?: number;
+  rejected_stage?: string;
 };
 
 type AuthoredSetDetail = AuthoredSetSummary & {
@@ -63,6 +82,31 @@ type ApproveState =
   | { status: 'pending' }
   | { status: 'approved'; reference: 'ocr' | 'generated' }
   | { status: 'error'; message: string };
+
+type ManualAuthoredSetRequest = {
+  search_space_id: number;
+  problems: { problem_text: string; solution_text?: string }[];
+};
+
+type ManualAuthoredSetResponse = {
+  set_id: number;
+  set_index: number;
+  status: 'pending';
+};
+
+type ProblemEditRequest = {
+  problem_text?: string;
+  reference_solution?: { id: string; content: Record<string, unknown> }[];
+};
+
+type EditedProblemResponse = {
+  concept_problem_id: number;
+  problem_text: string;
+  problem_text_truncated: boolean;
+  reference_solution?: ReferenceStep[] | null;
+  solution_text?: string;
+  review: ProblemReview | null;
+};
 
 const NON_TERMINAL: AuthoredStatus[] = ['pending', 'indexing', 'provisioning'];
 const isNonTerminal = (s: AuthoredStatus) => NON_TERMINAL.includes(s);
@@ -141,6 +185,9 @@ export default function AuthoredSetsPanel({
   const [problemFile, setProblemFile] = useState<File | null>(null);
   const [solutionFile, setSolutionFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [manualQuestion, setManualQuestion] = useState('');
+  const [manualSolution, setManualSolution] = useState('');
+  const [submittingManual, setSubmittingManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approveState, setApproveState] = useState<Record<number, ApproveState>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -171,7 +218,9 @@ export default function AuthoredSetsPanel({
   const fetchDetail = useCallback(
     async (setId: number) => {
       try {
-        const resp = await fetch(`/api/teacher/authored-sets/${setId}`, { headers: authHeaders() });
+        const resp = await fetch(`/api/teacher/authored-sets/${setId}?full_text=1`, {
+          headers: authHeaders(),
+        });
         if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Failed to load set detail'));
         const data: AuthoredSetDetail = await resp.json();
         setDetails((prev) => ({ ...prev, [setId]: data }));
@@ -233,6 +282,46 @@ export default function AuthoredSetsPanel({
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    if (!accessToken) {
+      setError('Sign in is required.');
+      return;
+    }
+    const problemText = manualQuestion.trim();
+    if (!problemText) {
+      setError('Enter a question.');
+      return;
+    }
+    setSubmittingManual(true);
+    setError(null);
+    try {
+      const request: ManualAuthoredSetRequest = {
+        search_space_id: searchSpaceId,
+        problems: [
+          {
+            problem_text: problemText,
+            ...(manualSolution.trim() ? { solution_text: manualSolution.trim() } : {}),
+          },
+        ],
+      };
+      const resp = await fetch('/api/teacher/authored-sets/manual', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(request),
+      });
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Problem creation failed'));
+      const created: ManualAuthoredSetResponse = await resp.json();
+      setManualQuestion('');
+      setManualSolution('');
+      setExpandedId(created.set_id);
+      await Promise.all([fetchDetail(created.set_id), fetchSets()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Problem creation failed');
+    } finally {
+      setSubmittingManual(false);
     }
   };
 
@@ -300,48 +389,104 @@ export default function AuthoredSetsPanel({
     }
   };
 
+  const handleEdit = async (
+    setId: number,
+    problemId: number,
+    request: ProblemEditRequest,
+  ): Promise<EditedProblemResponse> => {
+    const resp = await fetch(`/api/teacher/problems/${problemId}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(request),
+    });
+    if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Save failed'));
+    const updated: EditedProblemResponse = await resp.json();
+    await fetchDetail(setId);
+    return updated;
+  };
+
   return (
     <div className="rounded-3xl teacher-panel-soft p-5">
       <div className="flex items-center justify-between">
         <div className="text-lg font-semibold teacher-section-title">Authored problem sets</div>
-        <span className="rounded-full teacher-pill px-3 py-1 text-xs">Paired PDFs</span>
+        <span className="rounded-full teacher-pill px-3 py-1 text-xs">PDF or typed</span>
       </div>
       <p className="mt-1 text-sm teacher-muted">
-        Upload a problem PDF and, optionally, its matching solution PDF. Each problem is grounded
-        against only its paired solution; low-confidence (e.g. handwritten) extractions are held
-        for your review. Without a solution PDF, Hoot drafts reference solutions that are held for
-        your review before students see them.
+        Upload a problem PDF or write a question directly. Optional answers ground the reference
+        solution; otherwise Hoot drafts one for your review before students see it.
       </p>
 
       {error && (
         <div className="mt-4 rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm">{error}</div>
       )}
 
-      {/* Upload form */}
-      <div className="mt-4 rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FilePicker
-            label="Problem PDF"
-            file={problemFile}
-            disabled={uploading}
-            onPick={setProblemFile}
-          />
-          <FilePicker
-            label="Solution PDF (optional)"
-            file={solutionFile}
-            disabled={uploading}
-            onPick={setSolutionFile}
-          />
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {/* Upload form */}
+        <div className="rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
+          <div className="text-sm font-semibold teacher-section-title">Upload PDFs</div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <FilePicker
+              label="Problem PDF"
+              file={problemFile}
+              disabled={uploading}
+              onPick={setProblemFile}
+            />
+            <FilePicker
+              label="Solution PDF (optional)"
+              file={solutionFile}
+              disabled={uploading}
+              onPick={setSolutionFile}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleUpload()}
+            disabled={uploading || !problemFile}
+            className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold self-start inline-flex items-center gap-2 disabled:opacity-50"
+          >
+            {uploading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+            {uploading ? 'Uploading…' : 'Create set'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleUpload()}
-          disabled={uploading || !problemFile}
-          className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold self-start inline-flex items-center gap-2 disabled:opacity-50"
-        >
-          {uploading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-          {uploading ? 'Uploading…' : 'Create set'}
-        </button>
+
+        {/* Manual authoring form */}
+        <div className="rounded-2xl teacher-panel-subtle p-4 flex flex-col gap-3">
+          <div className="text-sm font-semibold teacher-section-title">Write a problem</div>
+          <label htmlFor="manual-problem-question" className="flex flex-col gap-1.5">
+            <span className="text-xs uppercase tracking-wide teacher-muted">Question</span>
+            <textarea
+              id="manual-problem-question"
+              required
+              rows={4}
+              value={manualQuestion}
+              disabled={submittingManual}
+              onChange={(event) => setManualQuestion(event.target.value)}
+              className="rounded-2xl teacher-input px-3 py-2 text-sm disabled:opacity-50"
+              placeholder="Write the full problem statement…"
+            />
+          </label>
+          <label htmlFor="manual-problem-answer" className="flex flex-col gap-1.5">
+            <span className="text-xs uppercase tracking-wide teacher-muted">Answer (optional)</span>
+            <textarea
+              id="manual-problem-answer"
+              rows={3}
+              value={manualSolution}
+              disabled={submittingManual}
+              onChange={(event) => setManualSolution(event.target.value)}
+              className="rounded-2xl teacher-input px-3 py-2 text-sm disabled:opacity-50"
+              placeholder="Add a worked answer or leave blank for an AI draft…"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleManualSubmit()}
+            disabled={submittingManual || !manualQuestion.trim()}
+            className="teacher-button-primary h-10 rounded-2xl px-4 text-sm font-semibold self-start inline-flex items-center gap-2 disabled:opacity-50"
+          >
+            {submittingManual ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+            {submittingManual ? 'Creating…' : 'Create problem'}
+          </button>
+        </div>
       </div>
 
       {/* Set list */}
@@ -352,6 +497,7 @@ export default function AuthoredSetsPanel({
         {sets.map((set) => {
           const detail = details[set.set_id];
           const expanded = expandedId === set.set_id;
+          const detailId = `authored-set-${set.set_id}-detail`;
           const problems = detail?.result_summary?.problems;
           // Header counts recompute from CURRENT problem states (approvals flip
           // holds to promoted); the stored counts freeze at provisioning time.
@@ -371,6 +517,8 @@ export default function AuthoredSetsPanel({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  aria-expanded={expanded}
+                  aria-controls={detailId}
                   onClick={() => toggleExpand(set.set_id)}
                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                 >
@@ -426,7 +574,7 @@ export default function AuthoredSetsPanel({
               )}
 
               {expanded && (
-                <div className="mt-3 border-t pt-3">
+                <div id={detailId} className="mt-3 border-t pt-3">
                   {set.status === 'failed' && (
                     <div className="rounded-2xl teacher-alert teacher-alert--danger px-3 py-2 text-sm">
                       {detail?.result_summary?.error || 'Provisioning failed.'}
@@ -456,9 +604,13 @@ export default function AuthoredSetsPanel({
                       return (
                         <ProblemRow
                           key={problem.concept_problem_id ?? idx}
+                          bodyId={`authored-set-${set.set_id}-problem-${idx}`}
                           problem={problem}
                           approveState={state}
                           onGoToConcepts={onGoToConcepts}
+                          onSave={(request) =>
+                            handleEdit(set.set_id, problem.concept_problem_id!, request)
+                          }
                           onApprove={(reference) => {
                             if (problem.concept_problem_id != null) {
                               void handleApprove(set.set_id, problem.concept_problem_id, reference);
@@ -510,8 +662,7 @@ function FilePicker({
   );
 }
 
-function stepContentText(content?: Record<string, unknown>): string {
-  if (!content || typeof content !== 'object') return '';
+function stepContentText(content: Record<string, unknown>): string {
   return Object.entries(content)
     .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
     .join(' · ');
@@ -519,6 +670,16 @@ function stepContentText(content?: Record<string, unknown>): string {
 
 function DraftPreview({ heading, draft }: { heading: string; draft: ReviewDraft }) {
   const steps = Array.isArray(draft.reference_solution) ? draft.reference_solution : [];
+  return <ReferenceSolutionPreview heading={heading} steps={steps} />;
+}
+
+function ReferenceSolutionPreview({
+  heading,
+  steps,
+}: {
+  heading: string;
+  steps: ReferenceStep[];
+}) {
   return (
     <div className="rounded-xl teacher-panel-soft px-3 py-2">
       <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">{heading}</div>
@@ -527,9 +688,9 @@ function DraftPreview({ heading, draft }: { heading: string; draft: ReviewDraft 
       ) : (
         <ol className="mt-1 flex flex-col gap-1">
           {steps.map((step, idx) => (
-            <li key={step.id ?? idx} className="text-xs leading-relaxed">
-              <span className="font-semibold">{step.step ?? idx + 1}.</span>{' '}
-              {step.entry_type && <span className="teacher-muted">[{step.entry_type}]</span>}{' '}
+            <li key={step.id || idx} className="text-xs leading-relaxed">
+              <span className="font-semibold">{step.step || idx + 1}.</span>{' '}
+              <span className="teacher-muted">[{step.entry_type}]</span>{' '}
               {stepContentText(step.content)}
             </li>
           ))}
@@ -551,99 +712,159 @@ function QuestionText({ problem }: { problem: AuthoredProblemResult }) {
     <div className="rounded-xl teacher-panel-soft px-3 py-2">
       <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</div>
       <p className="mt-1 whitespace-pre-wrap text-sm">
-        {problem.problem_text}
-        {problem.problem_text_truncated ? '…' : ''}
+        {problem.problem_text}{problem.problem_text_truncated ? '…' : ''}
       </p>
     </div>
   );
 }
 
+function cloneReferenceSteps(steps: ReferenceStep[] | null | undefined): ReferenceStep[] {
+  return (steps ?? []).map((step) => ({
+    ...step,
+    content: { ...step.content },
+    depends_on: [...step.depends_on],
+  }));
+}
+
+function ProblemEditFields({
+  bodyId,
+  problemText,
+  steps,
+  pending,
+  error,
+  onProblemTextChange,
+  onStepStringChange,
+  onSave,
+  onCancel,
+}: {
+  bodyId: string;
+  problemText: string;
+  steps: ReferenceStep[];
+  pending: boolean;
+  error: string | null;
+  onProblemTextChange: (value: string) => void;
+  onStepStringChange: (stepIndex: number, key: string, value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <label htmlFor={`${bodyId}-question-edit`} className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</span>
+        <textarea
+          id={`${bodyId}-question-edit`}
+          required
+          rows={5}
+          value={problemText}
+          disabled={pending}
+          onChange={(event) => onProblemTextChange(event.target.value)}
+          className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+        />
+      </label>
+
+      {steps.length > 0 && (
+        <div className="rounded-xl teacher-panel-soft px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Reference solution
+          </div>
+          <div className="mt-2 flex flex-col gap-3">
+            {steps.map((step, stepIndex) => (
+              <div key={step.id} className="rounded-xl teacher-panel-subtle p-3">
+                <p className="text-xs font-semibold">
+                  Step {step.step} <span className="teacher-muted">[{step.entry_type}] · {step.id}</span>
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {Object.entries(step.content).map(([key, value], contentIndex) => {
+                    const fieldId = `${bodyId}-step-${stepIndex}-content-${contentIndex}`;
+                    if (typeof value === 'string') {
+                      return (
+                        <label key={key} htmlFor={fieldId} className="flex flex-col gap-1">
+                          <span className="text-xs teacher-muted">{key.replace(/_/g, ' ')}</span>
+                          <textarea
+                            id={fieldId}
+                            rows={2}
+                            value={value}
+                            disabled={pending}
+                            onChange={(event) =>
+                              onStepStringChange(stepIndex, key, event.target.value)
+                            }
+                            className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+                          />
+                        </label>
+                      );
+                    }
+                    return (
+                      <div key={key} className="text-xs teacher-muted">
+                        <span className="font-semibold">{key.replace(/_/g, ' ')}:</span>{' '}
+                        {JSON.stringify(value)} <span className="italic">(read-only)</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-2 text-xs">
+          {error}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending || !problemText.trim()}
+          onClick={onSave}
+          className="teacher-button-primary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {pending ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          {pending ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onCancel}
+          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProblemRow({
+  bodyId,
   problem,
   approveState,
   onApprove,
   onGoToConcepts,
+  onSave,
 }: {
+  bodyId: string;
   problem: AuthoredProblemResult;
   approveState: ApproveState | undefined;
   onApprove: (reference: 'ocr' | 'generated') => void;
   onGoToConcepts?: () => void;
+  onSave: (request: ProblemEditRequest) => Promise<EditedProblemResponse>;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editProblemText, setEditProblemText] = useState('');
+  const [editSteps, setEditSteps] = useState<ReferenceStep[]>([]);
+  const [editPending, setEditPending] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const title = problem.label ? `Problem ${problem.label}` : 'Problem';
   const conf =
     problem.ocr_confidence != null ? ` · OCR ${(problem.ocr_confidence * 100).toFixed(0)}%` : '';
   const outcome = effectiveOutcome(problem, approveState);
-
-  if (outcome === 'promoted') {
-    const approvedByTeacher =
-      approveState?.status === 'approved' || Boolean(problem.review?.approved_reference);
-    return (
-      <div className="flex items-center gap-2 rounded-xl teacher-panel-soft px-3 py-2 text-sm">
-        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-        <span className="font-medium">{title}</span>
-        <span className="teacher-muted">
-          {approvedByTeacher
-            ? 'approved — now teachable'
-            : `promoted (${problem.solution_source}${conf})`}
-        </span>
-      </div>
-    );
-  }
-
-  if (outcome === 'rejected') {
-    return (
-      <div className="flex items-center gap-2 rounded-xl teacher-panel-soft px-3 py-2 text-sm">
-        <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
-        <span className="font-medium">{title}</span>
-        <span className="teacher-muted truncate">
-          rejected{problem.failed_gate != null ? ` (gate ${problem.failed_gate})` : ''}
-          {problem.diagnostic ? ` — ${problem.diagnostic}` : ''}
-        </span>
-      </div>
-    );
-  }
-
-  // held_for_review
   const reason = problem.review?.reason ?? problem.reason;
   const pending = approveState?.status === 'pending';
-
-  // A no_matching_concept hold stores NO draft — the backend 409s any approve.
-  // Render guidance instead of buttons that can only fail.
-  if (reason === 'no_matching_concept') {
-    return (
-      <div className="rounded-xl teacher-alert teacher-alert--warning px-3 py-2.5 text-sm flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span className="font-medium">{title}</span>
-          <span className="teacher-muted">held · {holdReasonLabel(reason)}</span>
-        </div>
-        <QuestionText problem={problem} />
-        <p className="text-xs teacher-muted">
-          This question didn&apos;t match any concept in your course list, so no solution was
-          drafted. Add the missing concept in the Concepts section, then re-upload this set.
-        </p>
-        {onGoToConcepts && (
-          <button
-            type="button"
-            onClick={onGoToConcepts}
-            className="teacher-button-secondary self-start rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5"
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            Go to Concepts
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  // Slot-driven approve buttons: one button per draft actually stored, labeled
-  // by the draft's real nature. ocr_draft is "the draft that came through the
-  // pipeline" — on problem-only uploads that is the AI-GENERATED draft
-  // (solution_source: "generated"); generated_alt exists only on the extracted
-  // path. Never render a button for an absent slot (it can only 422).
   const review = problem.review;
   const buttons: { reference: 'ocr' | 'generated'; label: string; draft: ReviewDraft | null }[] = [];
-  if (review) {
+  if (outcome === 'held_for_review' && review) {
     if (review.ocr_draft) {
       buttons.push({
         reference: 'ocr',
@@ -661,7 +882,7 @@ function ProblemRow({
         draft: review.generated_alt,
       });
     }
-  } else {
+  } else if (outcome === 'held_for_review') {
     // Old response shape (backend not yet deployed): no slot info. reason is
     // still present, so a generated-draft hold gets its one valid button; only
     // genuine extracted-path holds keep both legacy choices.
@@ -671,60 +892,236 @@ function ProblemRow({
     }
   }
 
+  const approvedByTeacher =
+    approveState?.status === 'approved' || Boolean(problem.review?.approved_reference);
+  const summary =
+    outcome === 'promoted'
+      ? approvedByTeacher
+        ? 'Approved — now teachable'
+        : `Promoted${problem.solution_source ? ` · ${problem.solution_source}` : ''}${conf}`
+      : outcome === 'rejected'
+        ? `Rejected${problem.failed_gate != null ? ` · gate ${problem.failed_gate}` : ''}`
+        : `Held · ${holdReasonLabel(reason)}${conf}`;
+
+  const beginEdit = () => {
+    setEditProblemText(problem.problem_text ?? '');
+    setEditSteps(cloneReferenceSteps(problem.reference_solution));
+    setEditError(null);
+    setEditing(true);
+    setExpanded(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditProblemText(problem.problem_text ?? '');
+    setEditSteps(cloneReferenceSteps(problem.reference_solution));
+    setEditError(null);
+  };
+
+  const updateStepString = (stepIndex: number, key: string, value: string) => {
+    setEditSteps((current) =>
+      current.map((step, index) =>
+        index === stepIndex
+          ? { ...step, content: { ...step.content, [key]: value } }
+          : step,
+      ),
+    );
+  };
+
+  const saveEdit = async () => {
+    if (problem.concept_problem_id == null) return;
+    setEditPending(true);
+    setEditError(null);
+    try {
+      const request: ProblemEditRequest = {};
+      if (editProblemText !== (problem.problem_text ?? '')) {
+        request.problem_text = editProblemText;
+      }
+      const originalStepEdits = (problem.reference_solution ?? []).map((step) => ({
+        id: step.id,
+        content: step.content,
+      }));
+      const nextStepEdits = editSteps.map((step) => ({ id: step.id, content: step.content }));
+      if (JSON.stringify(nextStepEdits) !== JSON.stringify(originalStepEdits)) {
+        request.reference_solution = nextStepEdits;
+      }
+      if (request.problem_text == null && request.reference_solution == null) {
+        setEditing(false);
+        return;
+      }
+      await onSave(request);
+      setEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setEditPending(false);
+    }
+  };
+
+  const cardClass =
+    outcome === 'held_for_review'
+      ? 'teacher-alert teacher-alert--warning'
+      : outcome === 'rejected'
+        ? 'teacher-alert teacher-alert--danger'
+        : 'teacher-panel-soft';
+
   return (
-    <div className="rounded-xl teacher-alert teacher-alert--warning px-3 py-2.5 text-sm flex flex-col gap-2">
+    <div className={`rounded-xl px-3 py-2.5 text-sm ${cardClass}`}>
       <div className="flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span className="font-medium">{title}</span>
-        <span className="teacher-muted">held · {holdReasonLabel(reason)}{conf}</span>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={() => setExpanded((current) => !current)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          )}
+          {outcome === 'promoted' ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          ) : outcome === 'rejected' ? (
+            <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+          )}
+          <span className="font-medium">{title}</span>
+          <span className="teacher-pill teacher-pill--neutral truncate rounded-full px-2 py-0.5 text-xs">
+            {summary}
+          </span>
+        </button>
+        {problem.concept_problem_id != null && (
+          <button
+            type="button"
+            aria-expanded={editing}
+            aria-label={editing ? `Cancel editing ${title}` : `Edit ${title}`}
+            title={editing ? 'Cancel editing' : `Edit ${title}`}
+            disabled={editPending}
+            onClick={editing ? cancelEdit : beginEdit}
+            className="teacher-button-secondary shrink-0 rounded-lg p-1.5 disabled:opacity-50"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
-      <QuestionText problem={problem} />
-      {buttons.map(
-        (button) =>
-          button.draft && (
-            <DraftPreview
-              key={`draft-${button.reference}`}
-              heading={
-                button.reference === 'generated'
-                  ? 'AI-generated alternative'
-                  : button.draft.solution_source === 'generated'
-                    ? 'AI-drafted solution'
-                    : 'Extracted (OCR) solution'
-              }
-              draft={button.draft}
+
+      {expanded && (
+        <div id={bodyId} className="mt-3 flex flex-col gap-2 border-t pt-3">
+          {editing ? (
+            <ProblemEditFields
+              bodyId={bodyId}
+              problemText={editProblemText}
+              steps={editSteps}
+              pending={editPending}
+              error={editError}
+              onProblemTextChange={setEditProblemText}
+              onStepStringChange={updateStepString}
+              onSave={() => void saveEdit()}
+              onCancel={cancelEdit}
             />
-          ),
-      )}
-      {buttons.length === 0 && (
-        <p className="text-xs teacher-muted">
-          No stored draft to approve — delete this set and re-upload it.
-        </p>
-      )}
-      {approveState?.status === 'error' && (
-        <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
-          {approveState.message}
+          ) : (
+            <>
+              <QuestionText problem={problem} />
+              {Array.isArray(problem.reference_solution) && (
+                <ReferenceSolutionPreview
+                  heading="Reference solution"
+                  steps={problem.reference_solution}
+                />
+              )}
+            </>
+          )}
+
+          {problem.solution_text && (
+            <div className="rounded-xl teacher-panel-soft px-3 py-2">
+              <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+                Authored solution
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{problem.solution_text}</p>
+            </div>
+          )}
+
+          {outcome === 'rejected' && problem.diagnostic && (
+            <div className="rounded-xl teacher-panel-soft px-3 py-2">
+              <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+                Diagnostic
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{problem.diagnostic}</p>
+            </div>
+          )}
+
+          {outcome === 'held_for_review' && reason === 'no_matching_concept' && (
+            <>
+              <p className="text-xs teacher-muted">
+                This question didn&apos;t match any concept in your course list, so no solution was
+                drafted. Add the missing concept in the Concepts section, then re-upload this set.
+              </p>
+              {onGoToConcepts && (
+                <button
+                  type="button"
+                  onClick={onGoToConcepts}
+                  className="teacher-button-secondary self-start rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Go to Concepts
+                </button>
+              )}
+            </>
+          )}
+
+          {outcome === 'held_for_review' && reason !== 'no_matching_concept' && (
+            <>
+              {buttons.map(
+                (button) =>
+                  button.draft && (
+                    <DraftPreview
+                      key={`draft-${button.reference}`}
+                      heading={
+                        button.reference === 'generated'
+                          ? 'AI-generated alternative'
+                          : button.draft.solution_source === 'generated'
+                            ? 'AI-drafted solution'
+                            : 'Extracted (OCR) solution'
+                      }
+                      draft={button.draft}
+                    />
+                  ),
+              )}
+              {buttons.length === 0 && (
+                <p className="text-xs teacher-muted">
+                  No stored draft to approve — delete this set and re-upload it.
+                </p>
+              )}
+              {approveState?.status === 'error' && (
+                <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+                  {approveState.message}
+                </div>
+              )}
+              {buttons.length > 0 && (
+                <>
+                  <p className="text-xs teacher-muted">
+                    Approving promotes the solution so students can teach this problem back.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {buttons.map((button) => (
+                      <button
+                        key={button.reference}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => onApprove(button.reference)}
+                        className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+                        {pending ? 'Approving…' : button.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </div>
-      )}
-      {buttons.length > 0 && (
-        <>
-          <p className="text-xs teacher-muted">
-            Approving promotes the solution so students can teach this problem back.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {buttons.map((button) => (
-              <button
-                key={button.reference}
-                type="button"
-                disabled={pending}
-                onClick={() => onApprove(button.reference)}
-                className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
-                {pending ? 'Approving…' : button.label}
-              </button>
-            ))}
-          </div>
-        </>
       )}
     </div>
   );
