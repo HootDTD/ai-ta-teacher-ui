@@ -14,8 +14,11 @@ export async function GET(
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (authHeader) headers.Authorization = authHeader;
   const { run_id } = await ctx.params;
+  const fullText = new URL(req.url).searchParams.get('full_text');
+  const fullTextQuery =
+    fullText == null ? '' : `?full_text=${encodeURIComponent(fullText)}`;
   const resp = await fetch(
-    `${backend}/apollo/problem-generation/runs/${encodeURIComponent(run_id)}`,
+    `${backend}/apollo/problem-generation/runs/${encodeURIComponent(run_id)}${fullTextQuery}`,
     { headers, cache: 'no-store' },
   );
 

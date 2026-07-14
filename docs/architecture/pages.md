@@ -10,7 +10,7 @@ related:
   - ai-ta-teacher-ui/_overview
   - shared/product-context
   - ai-ta-backend/indexing
-last_verified: 2026-07-12
+last_verified: 2026-07-14
 stub: false
 ---
 
@@ -42,8 +42,10 @@ All `app/api/**` files are thin pass-through proxies (`export const runtime = 'n
 | `app/api/teacher/uploads/[id]/retry/route.ts` (POST) | `POST /teacher/uploads/{id}/retry` |
 | `app/api/teacher/retrieval-weights/route.ts` (GET, POST) | `GET|POST /teacher/retrieval-weights` |
 | `app/api/teacher/authored-sets/route.ts` (GET, POST) | `GET|POST /apollo/authored-sets` (POST re-sends `req.formData()` as multipart; `problem` is required and `solution` is optional) |
-| `app/api/teacher/authored-sets/[set_id]/route.ts` (GET, DELETE) | `GET|DELETE /apollo/authored-sets/{set_id}` |
+| `app/api/teacher/authored-sets/[set_id]/route.ts` (GET, DELETE) | `GET /apollo/authored-sets/{set_id}?full_text=` (query forwarded for untruncated problem text); `DELETE /apollo/authored-sets/{set_id}` |
+| `app/api/teacher/authored-sets/manual/route.ts` (POST) | `POST /apollo/authored-sets/manual` (JSON `{search_space_id, problems:[{problem_text, solution_text?}]}`) |
 | `app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts` (POST) | `POST /apollo/authored-sets/{set_id}/problems/{problem_id}/approve` |
+| `app/api/teacher/problems/[problem_id]/route.ts` (PATCH) | `PATCH /apollo/authored-sets/problems/{problem_id}` (question text and content-only reference-solution edits) |
 | `app/api/teacher/concepts/route.ts` (GET, POST) | `GET /apollo/teacher/concepts?search_space_id=`, `POST /apollo/teacher/concepts` — WU-TCA concept authoring, consumed by the console's Concepts section (`app/components/ConceptsPanel.tsx`) |
 | `app/api/teacher/concepts/[concept_id]/route.ts` (PATCH, DELETE) | `PATCH|DELETE /apollo/teacher/concepts/{concept_id}` |
 | `app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts` (GET) | `GET /apollo/problem-generation/concepts/{concept_id}/seeds` |
@@ -72,7 +74,8 @@ Note: `/api/ask`, `/api/chats/[chat_id]`, and the report-creation POST are not c
 6. **Invite links** (`/`): one active link per role (student/teacher). Generate/Regenerate → `POST /api/invite-links {search_space_id, role}`; Revoke → `DELETE /api/invite-links/{id}`; Copy builds URL `{base}/join/{code}` where base = `NEXT_PUBLIC_STUDENT_APP_URL` for student links, `window.location.origin` for teacher links.
 7. **Join via invite** (`/join/[code]`): unauthenticated `GET /api/invite-links/resolve/{code}` shows course name (or "Invalid Invite Link"); once a session exists and the link resolved, a `useEffect` auto-fires `POST /api/invite-links/redeem/{code}` with Bearer token; on `success` shows "You're in!" and `router.push('/')` after 1.5s.
 8. **View AI-use report** (`/report/[id]`): requires session → `GET /api/reports/ai-use/{id}` → renders `data.markdown` via `<ReactMarkdown>` inside `.teacher-prose`; warning banner if `jsonld.evidence.truncated`; "Prompts log" section extracts `(#turn-N)` anchors from the markdown (first 12 unique) as in-page links; sidebar shows chat_id, created_at, `model_fingerprint`, `prompt_hashes`. Exports: Copy / Blob-download .md / .json client-side; PDF via `GET /api/reports/ai-use/{id}/pdf` (uses `alert()` on failure).
-9. **Generate and review problem variants** (`/`, Concepts → Generated Problems): expanding "Generate variants" loads tier-2 seed problems, starts a generation run with selected seed ids and a count from 1–10, then navigates to the generated-runs review surface. `GeneratedProblemsPanel` polls every 4s while a run is pending/running, lazily loads run details, presents provenance, round-trip and qualitative checks, cost/drop metadata, and posts `{reference: 'ocr'}` approvals. Approval success depends on the response's `promoted` field, not HTTP 200 alone. A 404 runs endpoint or generation endpoint is a quiet deployment-availability state; a 403 generation response uses deployment-disabled copy.
+9. **Create, inspect, and edit problem sets** (`/`, Problem Sets): `AuthoredSetsPanel` lists every PDF-uploaded or manually authored set and polls pending/indexing/provisioning rows every 4s. Teachers can upload paired PDFs or submit typed `{problem_text, solution_text?}` JSON. Expanding a set requests `full_text=1`; every promoted, held, or rejected outcome appears as its own collapsible card with full available question/solution data, while held cards retain their review and approval controls. Concept-backed cards expose a pencil action that PATCHes question text and string-valued reference-step content without changing step ids, entry types, order, or other non-string values. Rejected legacy rows remain readable even when older payload fields are absent.
+10. **Generate and review problem variants** (`/`, Concepts → Generated Problems): expanding "Generate variants" loads tier-2 seed problems, starts a generation run with selected seed ids and a count from 1–10, then navigates to the generated-runs review surface. `GeneratedProblemsPanel` polls every 4s while a run is pending/running, lazily loads run details, presents provenance, round-trip and qualitative checks, cost/drop metadata, and posts `{reference: 'ocr'}` approvals. Its concept-backed cards use the same pencil/PATCH editing flow as authored-set cards. Approval success depends on the response's `promoted` field, not HTTP 200 alone. A 404 runs endpoint or generation endpoint is a quiet deployment-availability state; a 403 generation response uses deployment-disabled copy.
 
 ## State
 
