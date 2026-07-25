@@ -1,0 +1,346 @@
+{
+  "$schema_version": 1,
+  "generated_by": "w0b-bootstrap-from-plan (gen_index_json.py)",
+  "generated_at": "2026-07-25",
+  "repo": "ai-ta-teacher-ui",
+  "docs_root": "docs/architecture",
+  "source_to_doc": {
+    "app/api/ask/route.ts": "api/reports-chat",
+    "app/api/chats/[chat_id]/route.ts": "api/reports-chat",
+    "app/api/classes/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/[id]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/redeem/[code]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/resolve/[code]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/route.ts": "api/auth-classes-invites",
+    "app/api/my-classes/route.ts": "api/auth-classes-invites",
+    "app/api/reports/ai-use/[id]/pdf/route.ts": "api/reports-chat",
+    "app/api/reports/ai-use/[id]/route.ts": "api/reports-chat",
+    "app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/[set_id]/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/manual/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/route.ts": "api/authored-sets",
+    "app/api/teacher/concepts/[concept_id]/route.ts": "api/concepts",
+    "app/api/teacher/concepts/route.ts": "api/concepts",
+    "app/api/teacher/current-week/route.ts": "api/materials",
+    "app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/concepts/[concept_id]/variants/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/problems/[problem_id]/approve/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/runs/[run_id]/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/runs/route.ts": "api/problem-generation",
+    "app/api/teacher/problems/[problem_id]/route.ts": "api/authored-sets",
+    "app/api/teacher/retrieval-weights/route.ts": "api/materials",
+    "app/api/teacher/upload/route.ts": "api/materials",
+    "app/api/teacher/uploads/[id]/retry/route.ts": "api/materials",
+    "app/api/teacher/weeks/route.ts": "api/materials",
+    "app/components/AiTuningSection.tsx": "sections/ai-tuning",
+    "app/components/AuthoredSetsPanel.tsx": "authoring/problem-sets",
+    "app/components/ConceptsPanel.tsx": "authoring/concepts",
+    "app/components/GeneratedProblemsPanel.tsx": "authoring/generated-problems",
+    "app/components/InvitesSection.tsx": "sections/invites",
+    "app/components/MaterialsSection.tsx": "sections/materials",
+    "app/components/ReportsSection.tsx": "sections/reports",
+    "app/components/TeacherSidebar.tsx": "shell/navigation",
+    "app/globals.css": "shell/styling",
+    "app/join/[code]/page.tsx": "routes/join",
+    "app/layout.tsx": "shell/app-entry",
+    "app/lib/auth.ts": "shell/auth-client",
+    "app/lib/flags.ts": "shell/console-types",
+    "app/lib/teacher.ts": "shell/console-types",
+    "app/page.tsx": "shell/console-orchestrator",
+    "app/report/[id]/page.tsx": "routes/report",
+    "eslint.config.mjs": "shell/project-config",
+    "next.config.ts": "shell/app-entry",
+    "package.json": "shell/project-config",
+    "postcss.config.mjs": "shell/project-config",
+    "tsconfig.json": "shell/project-config"
+  },
+  "docs": {
+    "ai-ta-teacher-ui/_overview": {
+      "path": "docs/architecture/_overview.md",
+      "kind": "router",
+      "description": "Root router (BFF-proxy pattern, port 3002)",
+      "owns": []
+    },
+    "api/_index": {
+      "path": "docs/architecture/api/_index.md",
+      "kind": "router",
+      "description": "BFF proxy router (documents the uniform proxy contract)",
+      "owns": []
+    },
+    "api/auth-classes-invites": {
+      "path": "docs/architecture/api/auth-classes-invites.md",
+      "kind": "leaf",
+      "description": "6 class/invite proxies",
+      "owns": [
+        "app/api/classes/route.ts",
+        "app/api/my-classes/route.ts",
+        "app/api/invite-links/route.ts",
+        "app/api/invite-links/[id]/route.ts",
+        "app/api/invite-links/redeem/[code]/route.ts",
+        "app/api/invite-links/resolve/[code]/route.ts"
+      ]
+    },
+    "api/authored-sets": {
+      "path": "docs/architecture/api/authored-sets.md",
+      "kind": "leaf",
+      "description": "5 authored-set proxies (incl. shared PATCH)",
+      "owns": [
+        "app/api/teacher/authored-sets/route.ts",
+        "app/api/teacher/authored-sets/manual/route.ts",
+        "app/api/teacher/authored-sets/[set_id]/route.ts",
+        "app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts",
+        "app/api/teacher/problems/[problem_id]/route.ts"
+      ]
+    },
+    "api/concepts": {
+      "path": "docs/architecture/api/concepts.md",
+      "kind": "leaf",
+      "description": "2 concept proxies",
+      "owns": [
+        "app/api/teacher/concepts/route.ts",
+        "app/api/teacher/concepts/[concept_id]/route.ts"
+      ]
+    },
+    "api/materials": {
+      "path": "docs/architecture/api/materials.md",
+      "kind": "leaf",
+      "description": "5 materials/weights proxies",
+      "owns": [
+        "app/api/teacher/upload/route.ts",
+        "app/api/teacher/uploads/[id]/retry/route.ts",
+        "app/api/teacher/weeks/route.ts",
+        "app/api/teacher/current-week/route.ts",
+        "app/api/teacher/retrieval-weights/route.ts"
+      ]
+    },
+    "api/problem-generation": {
+      "path": "docs/architecture/api/problem-generation.md",
+      "kind": "leaf",
+      "description": "5 generation proxies",
+      "owns": [
+        "app/api/teacher/problem-generation/runs/route.ts",
+        "app/api/teacher/problem-generation/runs/[run_id]/route.ts",
+        "app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts",
+        "app/api/teacher/problem-generation/concepts/[concept_id]/variants/route.ts",
+        "app/api/teacher/problem-generation/problems/[problem_id]/approve/route.ts"
+      ]
+    },
+    "api/reports-chat": {
+      "path": "docs/architecture/api/reports-chat.md",
+      "kind": "leaf",
+      "description": "4 report/chat proxies",
+      "owns": [
+        "app/api/ask/route.ts",
+        "app/api/chats/[chat_id]/route.ts",
+        "app/api/reports/ai-use/[id]/route.ts",
+        "app/api/reports/ai-use/[id]/pdf/route.ts"
+      ]
+    },
+    "authoring/_index": {
+      "path": "docs/architecture/authoring/_index.md",
+      "kind": "router",
+      "description": "Authoring panels router",
+      "owns": []
+    },
+    "authoring/concepts": {
+      "path": "docs/architecture/authoring/concepts.md",
+      "kind": "leaf",
+      "description": "ConceptsPanel",
+      "owns": [
+        "app/components/ConceptsPanel.tsx"
+      ]
+    },
+    "authoring/generated-problems": {
+      "path": "docs/architecture/authoring/generated-problems.md",
+      "kind": "leaf",
+      "description": "GeneratedProblemsPanel (~867 lines)",
+      "owns": [
+        "app/components/GeneratedProblemsPanel.tsx"
+      ]
+    },
+    "authoring/problem-sets": {
+      "path": "docs/architecture/authoring/problem-sets.md",
+      "kind": "leaf",
+      "description": "AuthoredSetsPanel (~1128 lines)",
+      "owns": [
+        "app/components/AuthoredSetsPanel.tsx"
+      ]
+    },
+    "routes/_index": {
+      "path": "docs/architecture/routes/_index.md",
+      "kind": "router",
+      "description": "Standalone routes router",
+      "owns": []
+    },
+    "routes/join": {
+      "path": "docs/architecture/routes/join.md",
+      "kind": "leaf",
+      "description": "app/join/[code]/page.tsx",
+      "owns": [
+        "app/join/[code]/page.tsx"
+      ]
+    },
+    "routes/report": {
+      "path": "docs/architecture/routes/report.md",
+      "kind": "leaf",
+      "description": "app/report/[id]/page.tsx",
+      "owns": [
+        "app/report/[id]/page.tsx"
+      ]
+    },
+    "sections/_index": {
+      "path": "docs/architecture/sections/_index.md",
+      "kind": "router",
+      "description": "Console sections router; back-links to shell nav+orchestrator",
+      "owns": []
+    },
+    "sections/ai-tuning": {
+      "path": "docs/architecture/sections/ai-tuning.md",
+      "kind": "leaf",
+      "description": "AiTuningSection",
+      "owns": [
+        "app/components/AiTuningSection.tsx"
+      ]
+    },
+    "sections/invites": {
+      "path": "docs/architecture/sections/invites.md",
+      "kind": "leaf",
+      "description": "InvitesSection",
+      "owns": [
+        "app/components/InvitesSection.tsx"
+      ]
+    },
+    "sections/materials": {
+      "path": "docs/architecture/sections/materials.md",
+      "kind": "leaf",
+      "description": "MaterialsSection",
+      "owns": [
+        "app/components/MaterialsSection.tsx"
+      ]
+    },
+    "sections/reports": {
+      "path": "docs/architecture/sections/reports.md",
+      "kind": "leaf",
+      "description": "ReportsSection",
+      "owns": [
+        "app/components/ReportsSection.tsx"
+      ]
+    },
+    "shell/_index": {
+      "path": "docs/architecture/shell/_index.md",
+      "kind": "router",
+      "description": "Console shell router; 'add a section' recipe (D21)",
+      "owns": []
+    },
+    "shell/app-entry": {
+      "path": "docs/architecture/shell/app-entry.md",
+      "kind": "leaf",
+      "description": "layout.tsx + next.config.ts + favicon",
+      "owns": [
+        "app/layout.tsx",
+        "next.config.ts"
+      ]
+    },
+    "shell/auth-client": {
+      "path": "docs/architecture/shell/auth-client.md",
+      "kind": "leaf",
+      "description": "lib/auth.ts",
+      "owns": [
+        "app/lib/auth.ts"
+      ]
+    },
+    "shell/console-orchestrator": {
+      "path": "docs/architecture/shell/console-orchestrator.md",
+      "kind": "leaf",
+      "description": "app/page.tsx (~1112 lines)",
+      "owns": [
+        "app/page.tsx"
+      ]
+    },
+    "shell/console-types": {
+      "path": "docs/architecture/shell/console-types.md",
+      "kind": "leaf",
+      "description": "lib/teacher.ts + lib/flags.ts",
+      "owns": [
+        "app/lib/teacher.ts",
+        "app/lib/flags.ts"
+      ]
+    },
+    "shell/navigation": {
+      "path": "docs/architecture/shell/navigation.md",
+      "kind": "leaf",
+      "description": "TeacherSidebar (+SectionKey type)",
+      "owns": [
+        "app/components/TeacherSidebar.tsx"
+      ]
+    },
+    "shell/project-config": {
+      "path": "docs/architecture/shell/project-config.md",
+      "kind": "leaf",
+      "description": "package/tsconfig/eslint/postcss",
+      "owns": [
+        "package.json",
+        "tsconfig.json",
+        "eslint.config.mjs",
+        "postcss.config.mjs"
+      ]
+    },
+    "shell/styling": {
+      "path": "docs/architecture/shell/styling.md",
+      "kind": "leaf",
+      "description": "globals.css (+brand assets)",
+      "owns": [
+        "app/globals.css"
+      ]
+    }
+  },
+  "indexes": {
+    "api/_index": {
+      "path": "docs/architecture/api/_index.md",
+      "children": [
+        "api/auth-classes-invites",
+        "api/authored-sets",
+        "api/concepts",
+        "api/materials",
+        "api/problem-generation",
+        "api/reports-chat"
+      ]
+    },
+    "authoring/_index": {
+      "path": "docs/architecture/authoring/_index.md",
+      "children": [
+        "authoring/concepts",
+        "authoring/generated-problems",
+        "authoring/problem-sets"
+      ]
+    },
+    "routes/_index": {
+      "path": "docs/architecture/routes/_index.md",
+      "children": [
+        "routes/join",
+        "routes/report"
+      ]
+    },
+    "sections/_index": {
+      "path": "docs/architecture/sections/_index.md",
+      "children": [
+        "sections/ai-tuning",
+        "sections/invites",
+        "sections/materials",
+        "sections/reports"
+      ]
+    },
+    "shell/_index": {
+      "path": "docs/architecture/shell/_index.md",
+      "children": [
+        "shell/app-entry",
+        "shell/auth-client",
+        "shell/console-orchestrator",
+        "shell/console-types",
+        "shell/navigation",
+        "shell/project-config",
+        "shell/styling"
+      ]
+    }
+  }
+}

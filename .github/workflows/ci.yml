@@ -36,8 +36,29 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  docs:
+    name: docs (architecture ownership lint)
+    runs-on: ubuntu-latest
+    # ADVISORY during the docs/granular-restructure split (PLAN §6.3): NOT in
+    # ci-passed and continue-on-error so a mid-flight bijection storm never
+    # red-fails a PR. W5 flips it to required (add to ci-passed.needs, drop
+    # continue-on-error, enable the --check-last-verified PR-path gate).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # base history for the (advisory) last_verified PR-path check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pyyaml
+      - name: Ownership bijection + related + index-freshness + size lint (.ts/.tsx)
+        run: python scripts/docs/check_owns_coverage.py --check-size
+
   ci-passed:
     name: ci-passed
+    # NOTE: `docs` is deliberately NOT in needs while the split is in flight
+    # (advisory). W5 adds it here.
     if: always()
     needs: [build]
     runs-on: ubuntu-latest
