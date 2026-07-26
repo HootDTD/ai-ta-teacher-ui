@@ -39,31 +39,38 @@ jobs:
   docs:
     name: docs (architecture ownership lint)
     runs-on: ubuntu-latest
-    # ADVISORY during the docs/granular-restructure split (PLAN §6.3): NOT in
-    # ci-passed and continue-on-error so a mid-flight bijection storm never
-    # red-fails a PR. W5 flips it to required (add to ci-passed.needs, drop
-    # continue-on-error, enable the --check-last-verified PR-path gate).
-    continue-on-error: true
+    # REQUIRED (W5 flip, PLAN §6.3/§7): the docs/granular-restructure split is green,
+    # so the lint is now in ci-passed.needs, continue-on-error is dropped, and the
+    # --check-last-verified PR-path gate is enabled as required. The last_verified
+    # gate is skipped on promotion PRs (base=main) — enforced on the way INTO staging.
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # base history for the (advisory) last_verified PR-path check
+          fetch-depth: 0 # base history for the last_verified PR-path check
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install pyyaml
       - name: Ownership bijection + related + index-freshness + size lint (.ts/.tsx)
         run: python scripts/docs/check_owns_coverage.py --check-size
+      - name: last_verified PR-path gate (changed owned file must bump its leaf)
+        if: github.event_name == 'pull_request' && github.base_ref != 'main'
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          python scripts/docs/check_owns_coverage.py \
+            --check-last-verified --last-verified-required \
+            --base "origin/${{ github.base_ref }}"
 
   ci-passed:
     name: ci-passed
-    # NOTE: `docs` is deliberately NOT in needs while the split is in flight
-    # (advisory). W5 adds it here.
+    # `docs` is REQUIRED as of the W5 flip (PLAN §7) — in needs and the assertion.
     if: always()
-    needs: [build]
+    needs: [build, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Assert required jobs passed
         run: |
           echo "build=${{ needs.build.result }}"
-          test "${{ needs.build.result }}" = "success"
+          echo "docs=${{ needs.docs.result }}"
+          test "${{ needs.build.result }}" = "success" \
+            && test "${{ needs.docs.result }}" = "success"
