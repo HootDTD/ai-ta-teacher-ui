@@ -3,7 +3,7 @@ doc: api/_index
 description: Router for the app/api/** BFF proxy domain — the uniform pass-through contract shared by all 27 route handlers, grouped into 6 resource leaves.
 owns: []
 related: []
-last_verified: 2026-07-25
+last_verified: 2026-07-30
 stub: false
 ---
 
@@ -31,6 +31,7 @@ verified backend-side, not here.**
 | [concepts](concepts.md) | `/apollo/teacher/concepts*` | 2 route.ts |
 | [problem-generation](problem-generation.md) | `/apollo/problem-generation/*` | 5 route.ts |
 | [reports-chat](reports-chat.md) | `/reports/ai-use/*`, `/ask`, `/chats/*` | 4 route.ts |
+| [classroom](classroom.md) | `/apollo/teacher/classroom/{id}/performance` | 1 route.ts |
 
 ## Cross-cutting invariants
 

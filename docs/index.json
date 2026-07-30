@@ -1,8 +1,8 @@
 {
   "$schema_version": 1,
   "generated_by": "check_owns_coverage.py --emit-index",
-  "generated_at": "2026-07-25",
-  "repo": "teacher-ui",
+  "generated_at": "2026-07-30",
+  "repo": "class-perf",
   "docs_root": "docs/architecture",
   "source_to_doc": {
     "app/api/ask/route.ts": "api/reports-chat",
@@ -19,6 +19,7 @@
     "app/api/teacher/authored-sets/[set_id]/route.ts": "api/authored-sets",
     "app/api/teacher/authored-sets/manual/route.ts": "api/authored-sets",
     "app/api/teacher/authored-sets/route.ts": "api/authored-sets",
+    "app/api/teacher/classroom/[search_space_id]/performance/route.ts": "api/classroom",
     "app/api/teacher/concepts/[concept_id]/route.ts": "api/concepts",
     "app/api/teacher/concepts/route.ts": "api/concepts",
     "app/api/teacher/current-week/route.ts": "api/materials",
@@ -34,6 +35,7 @@
     "app/api/teacher/weeks/route.ts": "api/materials",
     "app/components/AiTuningSection.tsx": "sections/ai-tuning",
     "app/components/AuthoredSetsPanel.tsx": "authoring/problem-sets",
+    "app/components/ClassPerformanceSection.tsx": "sections/performance",
     "app/components/ConceptsPanel.tsx": "authoring/concepts",
     "app/components/GeneratedProblemsPanel.tsx": "authoring/generated-problems",
     "app/components/InvitesSection.tsx": "sections/invites",
@@ -97,6 +99,14 @@
         "app/api/teacher/authored-sets/manual/route.ts",
         "app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts",
         "app/api/teacher/problems/[problem_id]/route.ts"
+      ]
+    },
+    "api/classroom": {
+      "path": "docs/architecture/api/classroom.md",
+      "kind": "leaf",
+      "description": "BFF proxy for the teacher classroom-performance endpoint \u2014 forwards to the backend's /apollo/teacher/classroom/{id}/performance.",
+      "owns": [
+        "app/api/teacher/classroom/[search_space_id]/performance/route.ts"
       ]
     },
     "api/concepts": {
@@ -198,7 +208,7 @@
     "sections/_index": {
       "path": "docs/architecture/sections/_index.md",
       "kind": "router",
-      "description": "Router for the dumb, presentational console sections \u2014 Materials, AI Tuning, Invites, Reports \u2014 which receive all state and callbacks from the page.tsx orchestrator.",
+      "description": "Router for the console sections \u2014 Materials, AI Tuning, Invites, Reports (presentational, orchestrator-fed) plus the self-fetching Performance panel.",
       "owns": []
     },
     "sections/ai-tuning": {
@@ -223,6 +233,14 @@
       "description": "MaterialsSection \u2014 presentational course-materials view (active-week control, course-wide textbook card, collapsible weekly notes/slides upload timeline).",
       "owns": [
         "app/components/MaterialsSection.tsx"
+      ]
+    },
+    "sections/performance": {
+      "path": "docs/architecture/sections/performance.md",
+      "kind": "leaf",
+      "description": "ClassPerformanceSection \u2014 self-fetching class-performance panel (roster tiles, grade distribution, activity, rubric-loss bars, concept + student tables) over the backend classroom-performance endpoint.",
+      "owns": [
+        "app/components/ClassPerformanceSection.tsx"
       ]
     },
     "sections/reports": {
@@ -314,6 +332,7 @@
       "children": [
         "api/auth-classes-invites",
         "api/authored-sets",
+        "api/classroom",
         "api/concepts",
         "api/materials",
         "api/problem-generation",
@@ -341,6 +360,7 @@
         "sections/ai-tuning",
         "sections/invites",
         "sections/materials",
+        "sections/performance",
         "sections/reports"
       ]
     },

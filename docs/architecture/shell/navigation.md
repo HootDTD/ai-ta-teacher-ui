@@ -4,7 +4,7 @@ description: TeacherSidebar — the presentational left-rail navigation, plus th
 owns:
   - app/components/TeacherSidebar.tsx
 related: [shell/console-orchestrator, shell/styling, sections/_index]
-last_verified: 2026-07-25
+last_verified: 2026-07-30
 stub: false
 ---
 
@@ -15,7 +15,7 @@ stub: false
 - `default export TeacherSidebar` (~69 lines, stateless).
 - **`export type SectionKey`** — the union
   `'materials' | 'concepts' | 'problem-sets' | 'generated-problems' |
-  'ai-tuning' | 'invites' | 'reports'`. This is a **cross-file contract**:
+  'ai-tuning' | 'invites' | 'reports' | 'performance'`. This is a **cross-file contract**:
   `console-orchestrator` (`app/page.tsx`) imports it to type `activeSection` and
   its `ALL_SECTIONS` list.
 - Props: `sections: { key: SectionKey; label; icon: LucideIcon }[]`, `active`,
