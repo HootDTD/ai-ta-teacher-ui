@@ -48,19 +48,28 @@ attempts/graded, class average, not-started), `GradeDistribution` (every
 letter band, zero buckets included, bars colored by grade band),
 `ProblemsByConcept` (concept group headers, per-problem stacked
 letter-distribution mini-bar + avg score + student count — supersedes the v1
-concept-rollup table), `ActivityByDay` (stacked graded/in-progress bars),
-`RubricLossBars` (3 axes — `misconception_corrected` removed),
-`EngagementInsights` (algorithmic-only: teaching-turns-vs-grade scatter with
-Pearson r / Spearman ρ / n, effort quartiles, retry-payoff strip — no
-LLM/Neo4j calls), and `StudentTable` (label = `email ?? "Student " + id8`,
-no separate email sub-line, no `full_name` fallback and no XP/level column;
-default sort by avg grade DESC via a header toggle, null averages always
-last; compact flag badges with `title` tooltips).
+concept-rollup table), `ActivityByDay` (stacked graded/in-progress bars;
+x-axis ticks via `formatDayTick` — day-of-month alone ("22"), month spelled
+out only at the first tick or on a month rollover ("Jul 22"), so 10+ bars
+never truncate), `RubricLossBars` (3 axes — `misconception_corrected`
+removed; a compact full-width strip, the 3 axes laid out side by side in one
+bar row so the card is only ever as tall as its own content), and
+`EngagementInsights` (algorithmic-only, full-width with an internal
+responsive grid: the teaching-turns-vs-grade scatter on the left — roughly
+2x the height of a standard inline chart, y ticks/faint `--border` gridlines
+at 50/75/100, real "Teaching turns" / "Avg grade" axis titles, Pearson r /
+Spearman ρ / n stated — and the effort-quartile bars + retry-payoff strip
+stacked on the right; quartile `label` text is rendered verbatim from the
+payload, never hardcoded; no LLM/Neo4j calls). `StudentTable` (label =
+`email ?? "Student " + id8`, no separate email sub-line, no `full_name`
+fallback and no XP/level column; default sort by avg grade DESC via a header
+toggle, null averages always last; compact flag badges with `title`
+tooltips) closes the section.
 
 Shared label/color/format helpers (`studentLabel`, `letterPillClass`,
-`bandForLetter`, `bandForScore`, `formatWhen`, `notStartedCount`, `FLAG_META`,
-…) live in `performance/utils.ts` so every block computes grade-band color the
-same way.
+`bandForLetter`, `bandForScore`, `formatWhen`, `formatDayTick`,
+`notStartedCount`, `FLAG_META`, …) live in `performance/utils.ts` so every
+block computes grade-band color and date/label formatting the same way.
 
 ## Non-obvious conventions
 
@@ -80,3 +89,8 @@ same way.
   unchanged (other consumers depend on it), but this UI intentionally no
   longer renders it — `ProblemsByConcept` subsumes it with per-problem
   detail.
+- `RubricLossBars` and `EngagementInsights` render as two standalone
+  full-width blocks (not a 2-col grid) — pairing a 3-bar-tall card against a
+  scatter-chart card forced equal height and left most of the shorter card
+  empty. Chart gridlines/axis lines stay `--border` (recessive); axis titles
+  and tick text stay `--muted` at minimum, never fainter, in both themes.

@@ -54,6 +54,23 @@ export function notStartedCount(
   return Math.max(0, roster.students - totals.active_students - totals.signed_in_only);
 }
 
+// Short, non-truncating x-axis tick for ActivityByDay: day-of-month alone
+// ("22") reads unambiguously once the month is established, so the month
+// only spells out at the first tick or wherever it rolls over ("Jul 22")
+// mid-range. Keeps every ordinary tick to 1-2 characters so 10+ bars stay
+// readable without ellipsis-truncating the label (see dataviz skill review).
+export function formatDayTick(day: string, prevDay: string | null): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  const dayOfMonth = d.getUTCDate();
+  const prev = prevDay ? new Date(`${prevDay}T00:00:00Z`) : null;
+  const showMonth =
+    !prev || Number.isNaN(prev.getTime()) || prev.getUTCMonth() !== d.getUTCMonth() || prev.getUTCFullYear() !== d.getUTCFullYear();
+  if (!showMonth) return String(dayOfMonth);
+  const month = d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' });
+  return `${month} ${dayOfMonth}`;
+}
+
 export function formatWhen(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);

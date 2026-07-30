@@ -7,6 +7,9 @@ const RUBRIC_LABELS: Record<keyof PerformancePayload['rubric_averages'], string>
   simplification: 'Simplification',
 };
 
+// Full-width compact strip: the 3 rubric axes sit side by side in one row
+// instead of stacking, so this card is only ever as tall as its own content
+// (a header + one bar row) — never stretched to match a taller neighbor.
 export default function RubricLossBars({ averages }: { averages: PerformancePayload['rubric_averages'] }) {
   const allNull = Object.values(averages).every((v) => v === null);
 
@@ -19,21 +22,23 @@ export default function RubricLossBars({ averages }: { averages: PerformancePayl
       {allNull ? (
         <p className="text-sm teacher-muted">No graded attempts yet.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           {(Object.keys(RUBRIC_LABELS) as (keyof typeof RUBRIC_LABELS)[]).map((key) => {
             const value = averages[key];
             return (
-              <div key={key} className="grid grid-cols-[10rem_1fr_2.5rem] items-center gap-2">
-                <span className="text-sm teacher-muted">{RUBRIC_LABELS[key]}</span>
+              <div key={key} className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm teacher-muted">{RUBRIC_LABELS[key]}</span>
+                  <span className="text-xs teacher-value tabular-nums">
+                    {value !== null ? Math.round(value) : '—'}
+                  </span>
+                </div>
                 <div className="h-3 rounded" style={{ background: 'var(--pill-bg)' }}>
                   <div
                     className="h-3 rounded"
                     style={{ background: CHART_COLOR_VAR[bandForScore(value)], width: `${value ?? 0}%` }}
                   />
                 </div>
-                <span className="text-xs text-right teacher-value tabular-nums">
-                  {value !== null ? Math.round(value) : '—'}
-                </span>
               </div>
             );
           })}

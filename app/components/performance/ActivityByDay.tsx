@@ -1,4 +1,4 @@
-import { CHART_COLOR_VAR } from './utils';
+import { CHART_COLOR_VAR, formatDayTick } from './utils';
 import type { PerformancePayload } from './types';
 
 export default function ActivityByDay({ days }: { days: PerformancePayload['activity_by_day'] }) {
@@ -15,7 +15,7 @@ export default function ActivityByDay({ days }: { days: PerformancePayload['acti
       ) : (
         <>
           <div className="flex items-end gap-2 h-36 border-b" style={{ borderColor: 'var(--border)' }}>
-            {days.map((day) => {
+            {days.map((day, i) => {
               const total = day.graded + day.in_progress;
               return (
                 <div
@@ -38,7 +38,9 @@ export default function ActivityByDay({ days }: { days: PerformancePayload['acti
                       />
                     )}
                   </div>
-                  <span className="text-[11px] teacher-muted mt-1 truncate max-w-full">{day.day.slice(5)}</span>
+                  <span className="text-[11px] teacher-muted mt-1 whitespace-nowrap">
+                    {formatDayTick(day.day, i > 0 ? days[i - 1].day : null)}
+                  </span>
                 </div>
               );
             })}

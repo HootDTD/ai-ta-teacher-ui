@@ -116,10 +116,13 @@ export default function ClassPerformanceSection({
 
           <ProblemsByConcept problems={data.problems} />
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            <RubricLossBars averages={data.rubric_averages} />
-            <EngagementInsights insights={data.insights} />
-          </div>
+          {/* Both full-width: RubricLossBars is a compact 3-bar strip and
+              EngagementInsights is the taller flagship card with its own
+              internal grid — pairing them in a 2-col row forced the short
+              card to match the tall one's height (see dataviz row-balance
+              review). */}
+          <RubricLossBars averages={data.rubric_averages} />
+          <EngagementInsights insights={data.insights} />
 
           <StudentTable students={data.students} notStarted={notStarted} />
         </>
