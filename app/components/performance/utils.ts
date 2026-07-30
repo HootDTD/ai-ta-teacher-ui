@@ -71,6 +71,23 @@ export function formatDayTick(day: string, prevDay: string | null): string {
   return `${month} ${dayOfMonth}`;
 }
 
+// Deploy-order tolerance: the backend and this UI deploy at different moments,
+// so a v1 payload (no problems/insights blocks, students without
+// engagement/flags) must render as empty states — never crash the tab.
+export function normalizePayload(raw: PerformancePayload): PerformancePayload {
+  return {
+    ...raw,
+    problems: raw.problems ?? [],
+    insights: raw.insights ?? { correlation: null, effort_quartiles: null, retry_payoff: null },
+    students: (raw.students ?? []).map((s) => ({
+      ...s,
+      engagement:
+        s.engagement ?? { teaching_turns: 0, median_words: null, problems_retried: 0, avg_gain: null },
+      flags: s.flags ?? [],
+    })),
+  };
+}
+
 export function formatWhen(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);

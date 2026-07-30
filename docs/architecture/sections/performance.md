@@ -41,7 +41,10 @@ grades are best-attempt-wins per (student, problem) carrying the SERVED
 letter, so the teacher sees exactly what the student saw). Re-fetches on a
 60s `setInterval` (`POLL_INTERVAL_MS`, background — no spinner) plus a manual
 Refresh button; the interval is torn down on unmount and rebuilt when class
-or token changes.
+or token changes. Responses pass through `normalizePayload`
+(`performance/utils.ts`): a v1 payload (no `problems`/`insights`, students
+without `engagement`/`flags`) renders as empty states, not a crash —
+the section tolerates one payload version of deploy skew.
 
 Rendered blocks, each its own component: `StatTiles` (enrolled/active,
 attempts/graded, class average, not-started), `GradeDistribution` (every

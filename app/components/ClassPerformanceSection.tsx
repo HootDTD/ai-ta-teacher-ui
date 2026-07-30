@@ -9,7 +9,7 @@ import ProblemsByConcept from './performance/ProblemsByConcept';
 import RubricLossBars from './performance/RubricLossBars';
 import StatTiles from './performance/StatTiles';
 import StudentTable from './performance/StudentTable';
-import { notStartedCount } from './performance/utils';
+import { normalizePayload, notStartedCount } from './performance/utils';
 import type { PerformancePayload } from './performance/types';
 
 // Payload contract: GET /apollo/teacher/classroom/{search_space_id}/performance
@@ -51,7 +51,7 @@ export default function ClassPerformanceSection({
           }
           throw new Error(detail);
         }
-        setData((await resp.json()) as PerformancePayload);
+        setData(normalizePayload((await resp.json()) as PerformancePayload));
         setUpdatedAt(new Date());
         setError(null);
       } catch (err) {
