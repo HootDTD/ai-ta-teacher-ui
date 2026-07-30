@@ -1,0 +1,380 @@
+{
+  "$schema_version": 1,
+  "generated_by": "check_owns_coverage.py --emit-index",
+  "generated_at": "2026-07-30",
+  "repo": "class-perf",
+  "docs_root": "docs/architecture",
+  "source_to_doc": {
+    "app/api/ask/route.ts": "api/reports-chat",
+    "app/api/chats/[chat_id]/route.ts": "api/reports-chat",
+    "app/api/classes/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/[id]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/redeem/[code]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/resolve/[code]/route.ts": "api/auth-classes-invites",
+    "app/api/invite-links/route.ts": "api/auth-classes-invites",
+    "app/api/my-classes/route.ts": "api/auth-classes-invites",
+    "app/api/reports/ai-use/[id]/pdf/route.ts": "api/reports-chat",
+    "app/api/reports/ai-use/[id]/route.ts": "api/reports-chat",
+    "app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/[set_id]/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/manual/route.ts": "api/authored-sets",
+    "app/api/teacher/authored-sets/route.ts": "api/authored-sets",
+    "app/api/teacher/classroom/[search_space_id]/performance/route.ts": "api/classroom",
+    "app/api/teacher/concepts/[concept_id]/route.ts": "api/concepts",
+    "app/api/teacher/concepts/route.ts": "api/concepts",
+    "app/api/teacher/current-week/route.ts": "api/materials",
+    "app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/concepts/[concept_id]/variants/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/problems/[problem_id]/approve/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/runs/[run_id]/route.ts": "api/problem-generation",
+    "app/api/teacher/problem-generation/runs/route.ts": "api/problem-generation",
+    "app/api/teacher/problems/[problem_id]/route.ts": "api/authored-sets",
+    "app/api/teacher/retrieval-weights/route.ts": "api/materials",
+    "app/api/teacher/upload/route.ts": "api/materials",
+    "app/api/teacher/uploads/[id]/retry/route.ts": "api/materials",
+    "app/api/teacher/weeks/route.ts": "api/materials",
+    "app/components/AiTuningSection.tsx": "sections/ai-tuning",
+    "app/components/AuthoredSetsPanel.tsx": "authoring/problem-sets",
+    "app/components/ClassPerformanceSection.tsx": "sections/performance",
+    "app/components/ConceptsPanel.tsx": "authoring/concepts",
+    "app/components/GeneratedProblemsPanel.tsx": "authoring/generated-problems",
+    "app/components/InvitesSection.tsx": "sections/invites",
+    "app/components/MaterialsSection.tsx": "sections/materials",
+    "app/components/ReportsSection.tsx": "sections/reports",
+    "app/components/TeacherSidebar.tsx": "shell/navigation",
+    "app/favicon.ico": "shell/app-entry",
+    "app/globals.css": "shell/styling",
+    "app/join/[code]/page.tsx": "routes/join",
+    "app/layout.tsx": "shell/app-entry",
+    "app/lib/auth.ts": "shell/auth-client",
+    "app/lib/flags.ts": "shell/console-types",
+    "app/lib/teacher.ts": "shell/console-types",
+    "app/page.tsx": "shell/console-orchestrator",
+    "app/report/[id]/page.tsx": "routes/report",
+    "eslint.config.mjs": "shell/project-config",
+    "next.config.ts": "shell/app-entry",
+    "package.json": "shell/project-config",
+    "postcss.config.mjs": "shell/project-config",
+    "public/file.svg": "shell/styling",
+    "public/globe.svg": "shell/styling",
+    "public/next.svg": "shell/styling",
+    "public/thinking.mp4": "shell/styling",
+    "public/vercel.svg": "shell/styling",
+    "public/window.svg": "shell/styling",
+    "tsconfig.json": "shell/project-config"
+  },
+  "docs": {
+    "ai-ta-teacher-ui/_overview": {
+      "path": "docs/architecture/_overview.md",
+      "kind": "router",
+      "description": "Thin root router for the Next.js 15 teacher console \u2014 routes to the five domain indexes (shell, sections, authoring, routes, api).",
+      "owns": []
+    },
+    "api/_index": {
+      "path": "docs/architecture/api/_index.md",
+      "kind": "router",
+      "description": "Router for the app/api/** BFF proxy domain \u2014 the uniform pass-through contract shared by all 27 route handlers, grouped into 6 resource leaves.",
+      "owns": []
+    },
+    "api/auth-classes-invites": {
+      "path": "docs/architecture/api/auth-classes-invites.md",
+      "kind": "leaf",
+      "description": "BFF proxies for classes and invite links \u2014 including the only unauthenticated proxy (invite resolve) and the invite redeem endpoint.",
+      "owns": [
+        "app/api/classes/route.ts",
+        "app/api/my-classes/route.ts",
+        "app/api/invite-links/route.ts",
+        "app/api/invite-links/[id]/route.ts",
+        "app/api/invite-links/resolve/[code]/route.ts",
+        "app/api/invite-links/redeem/[code]/route.ts"
+      ]
+    },
+    "api/authored-sets": {
+      "path": "docs/architecture/api/authored-sets.md",
+      "kind": "leaf",
+      "description": "BFF proxies for authored problem sets (all forward to backend /apollo/authored-sets*), including the PATCH problem-edit endpoint shared by two authoring panels.",
+      "owns": [
+        "app/api/teacher/authored-sets/route.ts",
+        "app/api/teacher/authored-sets/[set_id]/route.ts",
+        "app/api/teacher/authored-sets/manual/route.ts",
+        "app/api/teacher/authored-sets/[set_id]/problems/[problem_id]/approve/route.ts",
+        "app/api/teacher/problems/[problem_id]/route.ts"
+      ]
+    },
+    "api/classroom": {
+      "path": "docs/architecture/api/classroom.md",
+      "kind": "leaf",
+      "description": "BFF proxy for the teacher classroom-performance endpoint \u2014 forwards to the backend's /apollo/teacher/classroom/{id}/performance.",
+      "owns": [
+        "app/api/teacher/classroom/[search_space_id]/performance/route.ts"
+      ]
+    },
+    "api/concepts": {
+      "path": "docs/architecture/api/concepts.md",
+      "kind": "leaf",
+      "description": "BFF proxies for WU-TCA concept authoring \u2014 list/create and patch/delete against the backend /apollo/teacher/concepts* surface.",
+      "owns": [
+        "app/api/teacher/concepts/route.ts",
+        "app/api/teacher/concepts/[concept_id]/route.ts"
+      ]
+    },
+    "api/materials": {
+      "path": "docs/architecture/api/materials.md",
+      "kind": "leaf",
+      "description": "BFF proxies for course materials and retrieval weights \u2014 weeks, current-week, multipart upload, upload retry, and retrieval-weights get/post.",
+      "owns": [
+        "app/api/teacher/weeks/route.ts",
+        "app/api/teacher/current-week/route.ts",
+        "app/api/teacher/upload/route.ts",
+        "app/api/teacher/uploads/[id]/retry/route.ts",
+        "app/api/teacher/retrieval-weights/route.ts"
+      ]
+    },
+    "api/problem-generation": {
+      "path": "docs/architecture/api/problem-generation.md",
+      "kind": "leaf",
+      "description": "BFF proxies for Apollo variant problem-generation \u2014 seed listing, run start, run listing/detail, and generated-reference approval.",
+      "owns": [
+        "app/api/teacher/problem-generation/concepts/[concept_id]/seeds/route.ts",
+        "app/api/teacher/problem-generation/concepts/[concept_id]/variants/route.ts",
+        "app/api/teacher/problem-generation/problems/[problem_id]/approve/route.ts",
+        "app/api/teacher/problem-generation/runs/route.ts",
+        "app/api/teacher/problem-generation/runs/[run_id]/route.ts"
+      ]
+    },
+    "api/reports-chat": {
+      "path": "docs/architecture/api/reports-chat.md",
+      "kind": "leaf",
+      "description": "BFF proxies for AI-use reports and Hoot chat \u2014 report get/create, report PDF export, the streaming /ask proxy, and the chat-turn proxy.",
+      "owns": [
+        "app/api/reports/ai-use/[id]/route.ts",
+        "app/api/reports/ai-use/[id]/pdf/route.ts",
+        "app/api/ask/route.ts",
+        "app/api/chats/[chat_id]/route.ts"
+      ]
+    },
+    "authoring/_index": {
+      "path": "docs/architecture/authoring/_index.md",
+      "kind": "router",
+      "description": "Router for the self-fetching Apollo problem-authoring panels (Concepts, Problem Sets, Generated Problems) that own their own fetch/poll/edit state.",
+      "owns": []
+    },
+    "authoring/concepts": {
+      "path": "docs/architecture/authoring/concepts.md",
+      "kind": "leaf",
+      "description": "ConceptsPanel \u2014 self-fetching concept CRUD plus the variant-generation launcher that seeds and starts an Apollo problem-generation run.",
+      "owns": [
+        "app/components/ConceptsPanel.tsx"
+      ]
+    },
+    "authoring/generated-problems": {
+      "path": "docs/architecture/authoring/generated-problems.md",
+      "kind": "leaf",
+      "description": "GeneratedProblemsPanel \u2014 reviews AI-generated variant runs (round-trip + qualitative checks, cost/drop metadata), approves reference solutions, and edits problems.",
+      "owns": [
+        "app/components/GeneratedProblemsPanel.tsx"
+      ]
+    },
+    "authoring/problem-sets": {
+      "path": "docs/architecture/authoring/problem-sets.md",
+      "kind": "leaf",
+      "description": "AuthoredSetsPanel \u2014 the largest authoring panel; uploads paired-PDF and manually-typed problem sets, polls provisioning, and reviews/approves/edits each extracted problem.",
+      "owns": [
+        "app/components/AuthoredSetsPanel.tsx"
+      ]
+    },
+    "routes/_index": {
+      "path": "docs/architecture/routes/_index.md",
+      "kind": "router",
+      "description": "Router for standalone full-page routes that render outside the console shell \u2014 the invite-redemption page and the AI-use report viewer.",
+      "owns": []
+    },
+    "routes/join": {
+      "path": "docs/architecture/routes/join.md",
+      "kind": "leaf",
+      "description": "JoinPage (/join/[code]) \u2014 resolves an invite code (unauthenticated), then after sign-in auto-redeems it and redirects into the console.",
+      "owns": [
+        "app/join/[code]/page.tsx"
+      ]
+    },
+    "routes/report": {
+      "path": "docs/architecture/routes/report.md",
+      "kind": "leaf",
+      "description": "ReportPage (/report/[id]) \u2014 the AI-use report viewer that renders report markdown and offers copy, .md/.json download, and server-side PDF export.",
+      "owns": [
+        "app/report/[id]/page.tsx"
+      ]
+    },
+    "sections/_index": {
+      "path": "docs/architecture/sections/_index.md",
+      "kind": "router",
+      "description": "Router for the console sections \u2014 Materials, AI Tuning, Invites, Reports (presentational, orchestrator-fed) plus the self-fetching Performance panel.",
+      "owns": []
+    },
+    "sections/ai-tuning": {
+      "path": "docs/architecture/sections/ai-tuning.md",
+      "kind": "leaf",
+      "description": "AiTuningSection \u2014 presentational retrieval-weight sliders (textbook/slides/notes) with dirty-gated Save and Reset-to-defaults; hidden on Apollo-only deployments.",
+      "owns": [
+        "app/components/AiTuningSection.tsx"
+      ]
+    },
+    "sections/invites": {
+      "path": "docs/architecture/sections/invites.md",
+      "kind": "leaf",
+      "description": "InvitesSection \u2014 presentational student/teacher join-link cards (one active link per role) with copy, regenerate, and revoke controls.",
+      "owns": [
+        "app/components/InvitesSection.tsx"
+      ]
+    },
+    "sections/materials": {
+      "path": "docs/architecture/sections/materials.md",
+      "kind": "leaf",
+      "description": "MaterialsSection \u2014 presentational course-materials view (active-week control, course-wide textbook card, collapsible weekly notes/slides upload timeline).",
+      "owns": [
+        "app/components/MaterialsSection.tsx"
+      ]
+    },
+    "sections/performance": {
+      "path": "docs/architecture/sections/performance.md",
+      "kind": "leaf",
+      "description": "ClassPerformanceSection \u2014 self-fetching class-performance panel (roster tiles, grade distribution, activity, rubric-loss bars, concept + student tables) over the backend classroom-performance endpoint.",
+      "owns": [
+        "app/components/ClassPerformanceSection.tsx"
+      ]
+    },
+    "sections/reports": {
+      "path": "docs/architecture/sections/reports.md",
+      "kind": "leaf",
+      "description": "ReportsSection \u2014 a trivial self-contained launcher that pushes a typed report ID to the standalone /report/[id] viewer; Hoot-only.",
+      "owns": [
+        "app/components/ReportsSection.tsx"
+      ]
+    },
+    "shell/_index": {
+      "path": "docs/architecture/shell/_index.md",
+      "kind": "router",
+      "description": "Router for the shell domain \u2014 app-level scaffolding, the page.tsx orchestrator, sidebar nav, styling, build config, and the auth + shared-type libs.",
+      "owns": []
+    },
+    "shell/app-entry": {
+      "path": "docs/architecture/shell/app-entry.md",
+      "kind": "leaf",
+      "description": "Root layout and build entry \u2014 RootLayout loads the Fraunces font and app metadata, next.config is empty (no rewrites), and the favicon is served by convention.",
+      "owns": [
+        "app/layout.tsx",
+        "next.config.ts",
+        "app/favicon.ico"
+      ]
+    },
+    "shell/auth-client": {
+      "path": "docs/architecture/shell/auth-client.md",
+      "kind": "leaf",
+      "description": "Hand-rolled browser-side Supabase GoTrue REST client \u2014 the only auth in the repo \u2014 including the new single-flight proactive refresh (ensureFreshStoredSession).",
+      "owns": [
+        "app/lib/auth.ts"
+      ]
+    },
+    "shell/console-orchestrator": {
+      "path": "docs/architecture/shell/console-orchestrator.md",
+      "kind": "leaf",
+      "description": "TeacherConsole (app/page.tsx) \u2014 the console's single state store, data-fetching hub, and section router that feeds the four presentational sections by props.",
+      "owns": [
+        "app/page.tsx"
+      ]
+    },
+    "shell/console-types": {
+      "path": "docs/architecture/shell/console-types.md",
+      "kind": "leaf",
+      "description": "Shared client types/constants (teacher.ts) plus the APOLLO_ONLY deployment flag (flags.ts), extracted to lib/ to break a page\u2194component import cycle.",
+      "owns": [
+        "app/lib/teacher.ts",
+        "app/lib/flags.ts"
+      ]
+    },
+    "shell/navigation": {
+      "path": "docs/architecture/shell/navigation.md",
+      "kind": "leaf",
+      "description": "TeacherSidebar \u2014 the presentational left-rail navigation, plus the exported SectionKey union type that page.tsx imports to drive activeSection.",
+      "owns": [
+        "app/components/TeacherSidebar.tsx"
+      ]
+    },
+    "shell/project-config": {
+      "path": "docs/architecture/shell/project-config.md",
+      "kind": "leaf",
+      "description": "Build, lint, type, and Tailwind config glue \u2014 package.json, tsconfig.json, eslint.config.mjs, postcss.config.mjs \u2014 for a raw-fetch, hand-rolled-auth app.",
+      "owns": [
+        "package.json",
+        "tsconfig.json",
+        "eslint.config.mjs",
+        "postcss.config.mjs"
+      ]
+    },
+    "shell/styling": {
+      "path": "docs/architecture/shell/styling.md",
+      "kind": "leaf",
+      "description": "The entire design system as CSS (globals.css) \u2014 semantic teacher-*/auth-*/boot-* class families, the light/dark theme tokens, and the shared brand video asset.",
+      "owns": [
+        "app/globals.css",
+        "public/thinking.mp4",
+        "public/file.svg",
+        "public/globe.svg",
+        "public/next.svg",
+        "public/vercel.svg",
+        "public/window.svg"
+      ]
+    }
+  },
+  "indexes": {
+    "api/_index": {
+      "path": "docs/architecture/api/_index.md",
+      "children": [
+        "api/auth-classes-invites",
+        "api/authored-sets",
+        "api/classroom",
+        "api/concepts",
+        "api/materials",
+        "api/problem-generation",
+        "api/reports-chat"
+      ]
+    },
+    "authoring/_index": {
+      "path": "docs/architecture/authoring/_index.md",
+      "children": [
+        "authoring/concepts",
+        "authoring/generated-problems",
+        "authoring/problem-sets"
+      ]
+    },
+    "routes/_index": {
+      "path": "docs/architecture/routes/_index.md",
+      "children": [
+        "routes/join",
+        "routes/report"
+      ]
+    },
+    "sections/_index": {
+      "path": "docs/architecture/sections/_index.md",
+      "children": [
+        "sections/ai-tuning",
+        "sections/invites",
+        "sections/materials",
+        "sections/performance",
+        "sections/reports"
+      ]
+    },
+    "shell/_index": {
+      "path": "docs/architecture/shell/_index.md",
+      "children": [
+        "shell/app-entry",
+        "shell/auth-client",
+        "shell/console-orchestrator",
+        "shell/console-types",
+        "shell/navigation",
+        "shell/project-config",
+        "shell/styling"
+      ]
+    }
+  }
+}
