@@ -2,7 +2,7 @@
   "$schema_version": 1,
   "generated_by": "check_owns_coverage.py --emit-index",
   "generated_at": "2026-07-30",
-  "repo": "class-perf",
+  "repo": "ai-ta-teacher-ui",
   "docs_root": "docs/architecture",
   "source_to_doc": {
     "app/api/ask/route.ts": "api/reports-chat",
@@ -42,6 +42,15 @@
     "app/components/MaterialsSection.tsx": "sections/materials",
     "app/components/ReportsSection.tsx": "sections/reports",
     "app/components/TeacherSidebar.tsx": "shell/navigation",
+    "app/components/performance/ActivityByDay.tsx": "sections/performance",
+    "app/components/performance/EngagementInsights.tsx": "sections/performance",
+    "app/components/performance/GradeDistribution.tsx": "sections/performance",
+    "app/components/performance/ProblemsByConcept.tsx": "sections/performance",
+    "app/components/performance/RubricLossBars.tsx": "sections/performance",
+    "app/components/performance/StatTiles.tsx": "sections/performance",
+    "app/components/performance/StudentTable.tsx": "sections/performance",
+    "app/components/performance/types.ts": "sections/performance",
+    "app/components/performance/utils.ts": "sections/performance",
     "app/favicon.ico": "shell/app-entry",
     "app/globals.css": "shell/styling",
     "app/join/[code]/page.tsx": "routes/join",
@@ -238,9 +247,18 @@
     "sections/performance": {
       "path": "docs/architecture/sections/performance.md",
       "kind": "leaf",
-      "description": "ClassPerformanceSection \u2014 self-fetching class-performance panel (roster tiles, grade distribution, activity, rubric-loss bars, concept + student tables) over the backend classroom-performance endpoint.",
+      "description": "ClassPerformanceSection \u2014 self-fetching class-performance panel (v2 \u2014 stat tiles, grade distribution, problems-by-concept, activity, rubric-loss bars, algorithmic engagement insights, student table) over the backend classroom-performance endpoint.",
       "owns": [
-        "app/components/ClassPerformanceSection.tsx"
+        "app/components/ClassPerformanceSection.tsx",
+        "app/components/performance/types.ts",
+        "app/components/performance/utils.ts",
+        "app/components/performance/StatTiles.tsx",
+        "app/components/performance/GradeDistribution.tsx",
+        "app/components/performance/ProblemsByConcept.tsx",
+        "app/components/performance/ActivityByDay.tsx",
+        "app/components/performance/EngagementInsights.tsx",
+        "app/components/performance/RubricLossBars.tsx",
+        "app/components/performance/StudentTable.tsx"
       ]
     },
     "sections/reports": {
