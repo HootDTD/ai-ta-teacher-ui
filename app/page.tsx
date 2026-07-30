@@ -15,6 +15,7 @@ import {
   Moon,
   MoreVertical,
   Sparkles,
+  BarChart3,
 } from 'lucide-react';
 import {
   SUPABASE_AUTH_ENABLED,
@@ -50,6 +51,7 @@ import MaterialsSection from './components/MaterialsSection';
 import AiTuningSection from './components/AiTuningSection';
 import InvitesSection from './components/InvitesSection';
 import ReportsSection from './components/ReportsSection';
+import ClassPerformanceSection from './components/ClassPerformanceSection';
 
 // Apollo-only deployments hide the Hoot-specific sections: AI Tuning
 // (retrieval weights) and Reports (AI-use reports on Hoot chats) — the
@@ -58,6 +60,7 @@ const HOOT_ONLY_SECTIONS: SectionKey[] = ['ai-tuning', 'reports'];
 
 const ALL_SECTIONS: { key: SectionKey; label: string; icon: typeof BookOpen }[] = [
   { key: 'materials', label: 'Materials', icon: BookOpen },
+  { key: 'performance', label: 'Performance', icon: BarChart3 },
   { key: 'concepts', label: 'Concepts', icon: Lightbulb },
   { key: 'problem-sets', label: 'Problem Sets', icon: ListChecks },
   { key: 'generated-problems', label: 'Generated Problems', icon: Sparkles },
@@ -1099,6 +1102,13 @@ export default function TeacherConsole() {
                   onGenerate={handleGenerateInvite}
                   onCopy={handleCopyInvite}
                   onRevoke={handleRevokeInvite}
+                />
+              )}
+
+              {activeSection === 'performance' && (
+                <ClassPerformanceSection
+                  searchSpaceId={selectedClassId}
+                  accessToken={accessToken || null}
                 />
               )}
 

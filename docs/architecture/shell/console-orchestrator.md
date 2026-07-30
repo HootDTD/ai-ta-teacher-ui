@@ -3,8 +3,8 @@ doc: shell/console-orchestrator
 description: TeacherConsole (app/page.tsx) — the console's single state store, data-fetching hub, and section router that feeds the four presentational sections by props.
 owns:
   - app/page.tsx
-related: [shell/navigation, shell/auth-client, shell/console-types, sections/_index, sections/materials, sections/ai-tuning, sections/invites, sections/reports, authoring/_index, api/auth-classes-invites, api/materials]
-last_verified: 2026-07-25
+related: [shell/navigation, shell/auth-client, shell/console-types, sections/_index, sections/materials, sections/ai-tuning, sections/invites, sections/reports, sections/performance, authoring/_index, api/auth-classes-invites, api/materials]
+last_verified: 2026-07-30
 stub: false
 ---
 

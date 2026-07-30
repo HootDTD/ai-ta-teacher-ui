@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 
 export type SectionKey =
   | 'materials'
+  | 'performance'
   | 'concepts'
   | 'problem-sets'
   | 'generated-problems'

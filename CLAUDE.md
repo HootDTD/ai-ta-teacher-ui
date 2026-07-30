@@ -16,7 +16,11 @@ Supabase.
 globs in its frontmatter and is the authority on those files:
 
 - `docs/architecture/_overview.md` — config, entry layout, env vars, Supabase auth helper, BFF proxy pattern
-- `docs/architecture/pages.md` — teacher console, join flow, report viewer, `app/api/**` proxy routes
+- Domain trees, each routed by its `_index.md`: `shell/` (console orchestrator,
+  navigation, auth client), `sections/` (Materials, Performance, AI Tuning,
+  Invites, Reports), `authoring/` (self-fetching Apollo panels), `api/` (BFF
+  proxy leaves), `routes/` (join flow, report viewer). Resolve any source file
+  to its owning leaf via `docs/index.json`.
 
 Never read a source file to understand the *system* — that's what the docs are
 for. Read code only to make the change.
