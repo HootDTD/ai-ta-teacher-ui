@@ -3,7 +3,7 @@ doc: sections/_index
 description: Router for the console sections — Materials, AI Tuning, Invites, Reports (presentational, orchestrator-fed) plus the self-fetching Performance panel.
 owns: []
 related: [shell/navigation, shell/console-orchestrator]
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 stub: false
 ---
 

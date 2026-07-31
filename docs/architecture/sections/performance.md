@@ -13,7 +13,7 @@ owns:
   - app/components/performance/RubricLossBars.tsx
   - app/components/performance/StudentTable.tsx
 related: [sections/_index, api/classroom, shell/console-orchestrator]
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 stub: false
 ---
 

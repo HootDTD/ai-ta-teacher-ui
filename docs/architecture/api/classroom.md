@@ -4,7 +4,7 @@ description: BFF proxy for the teacher classroom-performance endpoint — forwar
 owns:
   - app/api/teacher/classroom/[search_space_id]/performance/route.ts
 related: [api/_index, sections/performance]
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 stub: false
 ---
 
