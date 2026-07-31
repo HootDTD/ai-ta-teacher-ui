@@ -9,8 +9,8 @@ owns:
   - public/next.svg
   - public/vercel.svg
   - public/window.svg
-related: [shell/app-entry, shell/console-orchestrator, routes/report]
-last_verified: 2026-07-25
+related: [shell/app-entry, shell/console-orchestrator, routes/report, sections/performance]
+last_verified: 2026-07-30
 stub: false
 ---
 
@@ -46,6 +46,14 @@ Tokens are CSS vars on `:root` (light, warm-beige `#e9dfcf`) with a `html.dark`
 override block; a transient `theme-transition` class animates the switch. Theme
 is toggled/persisted by `console-orchestrator` (`localStorage['theme']`), not
 here. `teacher-prose` styles the markdown in [routes/report](../routes/report.md).
+
+**Chart marks:** `--chart-green` / `--chart-blue` / `--chart-red` (both `:root`
+and `html.dark`) are the only sanctioned colors for data marks (bars, scatter
+points) in [sections/performance](../sections/performance.md) — hexes chosen
+and pairwise CVD-validated (dataviz skill's `validate_palette.js`, `--pairs
+all`) against each theme's panel surface. Not semantically interchangeable
+with the pre-existing `--success` / `--danger` text-alert tokens, which stay
+scoped to `teacher-alert`/`teacher-pill` text and backgrounds.
 
 ## Invariants & gotchas
 

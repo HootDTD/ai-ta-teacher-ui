@@ -600,7 +600,17 @@ def check_last_verified(repo_root, base, docs, owners, report, required=False):
                 ).stdout
             except Exception:
                 dd = ""
-            if not re.search(r"^\+.*last_verified", dd, re.MULTILINE):
+            bumped = bool(re.search(r"^\+.*last_verified", dd, re.MULTILINE))
+            # Same-day tolerance: a bare YYYY-MM-DD value re-touched on the same
+            # calendar day as an earlier bump in this branch produces no line-level
+            # diff (the text is identical before/after), which would otherwise
+            # false-fail a genuine same-day re-verification. The doc file is
+            # already confirmed part of this diff (checked above) — if its current
+            # last_verified equals today, that's a real re-verification, just one
+            # date-granularity can't express as a text diff.
+            if not bumped and str(doc.fm.get("last_verified", "")).strip() == date.today().isoformat():
+                bumped = True
+            if not bumped:
                 _emit_lv(
                     report,
                     required,

@@ -3,7 +3,7 @@ doc: sections/_index
 description: Router for the console sections — Materials, AI Tuning, Invites, Reports (presentational, orchestrator-fed) plus the self-fetching Performance panel.
 owns: []
 related: [shell/navigation, shell/console-orchestrator]
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 stub: false
 ---
 
@@ -20,7 +20,7 @@ of their own** — every bit of state and every callback comes from
 | [ai-tuning](ai-tuning.md) | retrieval-weight sliders (textbook/slides/notes) with save + reset | `app/components/AiTuningSection.tsx` |
 | [invites](invites.md) | one active student + one active teacher join link, per role | `app/components/InvitesSection.tsx` |
 | [reports](reports.md) | report-ID launcher that pushes to the standalone report viewer | `app/components/ReportsSection.tsx` |
-| [performance](performance.md) | self-fetching class-performance panel over the classroom endpoint | `app/components/ClassPerformanceSection.tsx` |
+| [performance](performance.md) | self-fetching class-performance panel over the classroom endpoint | `app/components/ClassPerformanceSection.tsx` + `app/components/performance/*` |
 
 ## Cross-cutting invariants
 
