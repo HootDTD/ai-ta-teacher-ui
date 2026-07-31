@@ -45,6 +45,13 @@
   --pill-neutral-border: rgba(30, 26, 21, 0.12);
   --pill-neutral-bg: rgba(30, 26, 21, 0.06);
   --code-bg: rgba(30, 26, 21, 0.08);
+  /* Class-performance chart marks (validated via dataviz skill's
+     validate_palette.js against the panel surface, --pairs all):
+     green = strong/positive, blue = informational/neutral, red = attention.
+     Never hardcode these hexes in components — read the custom properties. */
+  --chart-green: #1c8a53;
+  --chart-blue: #1668b8;
+  --chart-red: #c94a1e;
 }
 
 html.dark {
@@ -90,6 +97,11 @@ html.dark {
   --owl-invert: 0;
   --owl-blend: screen;
   --accent-soft: #2e2c28;
+  /* Dark-mode chart marks — re-stepped (not a flip) against the dark surface,
+     validated the same way as the light set. */
+  --chart-green: #3fa46b;
+  --chart-blue: #4f9bd6;
+  --chart-red: #e0693f;
 }
 
 *,

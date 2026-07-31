@@ -4,7 +4,7 @@ description: BFF proxy for the teacher classroom-performance endpoint — forwar
 owns:
   - app/api/teacher/classroom/[search_space_id]/performance/route.ts
 related: [api/_index, sections/performance]
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 stub: false
 ---
 
@@ -23,3 +23,10 @@ missing"` if unset; Next 15 `Promise` ctx params):
 
 Auth is enforced by the backend (`require_course_teacher`); the proxy adds
 nothing. Consumed only by `sections/performance`.
+
+The route itself is a byte-for-byte pass-through — it never changes shape
+with the backend payload. The v2 `PerformancePayload` contract (emails
+instead of ids, `problems` + `insights` blocks, no `xp`/`level`/
+`misconception_corrected`) is documented and typed only in
+[sections/performance](../sections/performance.md); this leaf does not
+mirror the schema.
