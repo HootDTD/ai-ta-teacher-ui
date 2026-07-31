@@ -110,7 +110,7 @@ export default function ClassPerformanceSection({
           <StatTiles roster={data.roster} totals={data.totals} classAverage={data.class_average} />
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <GradeDistribution buckets={data.grade_distribution} />
+            <GradeDistribution buckets={data.grade_distribution} problems={data.problems} students={data.students} />
             <ActivityByDay days={data.activity_by_day} />
           </div>
 

@@ -73,11 +73,19 @@ export function formatDayTick(day: string, prevDay: string | null): string {
 
 // Deploy-order tolerance: the backend and this UI deploy at different moments,
 // so a v1 payload (no problems/insights blocks, students without
-// engagement/flags) must render as empty states — never crash the tab.
+// engagement/flags) must render as empty states — never crash the tab. v2.1
+// adds problem_text/students/nodes to each problems[] row; a v2-only payload
+// (problems present, new fields absent) must render those as empty text/[]
+// rather than crash — same deploy-skew tolerance, one field-set deeper.
 export function normalizePayload(raw: PerformancePayload): PerformancePayload {
   return {
     ...raw,
-    problems: raw.problems ?? [],
+    problems: (raw.problems ?? []).map((p) => ({
+      ...p,
+      problem_text: p.problem_text ?? '',
+      students: p.students ?? [],
+      nodes: p.nodes ?? [],
+    })),
     insights: raw.insights ?? { correlation: null, effort_quartiles: null, retry_payoff: null },
     students: (raw.students ?? []).map((s) => ({
       ...s,
