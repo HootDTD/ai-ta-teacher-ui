@@ -33,6 +33,21 @@ export type StudentRow = {
 
 export type DistributionBucket = { letter: string; count: number };
 
+// v2.1 additive types (design spec "v2.1 addendum"). Populated per-problem —
+// the best-wins row per student for that problem, and per-reference-graph-node
+// right/wrong counts reusing the same credit logic the scorer uses.
+export type ProblemStudentGrade = { user_id: string; email: string | null; score: number; letter: string };
+
+export type ProblemNode = {
+  node_id: string;
+  display_name: string;
+  node_type: string;
+  understood: number;
+  partial: number;
+  missed: number;
+  graded: number;
+};
+
 export type ProblemRow = {
   problem_id: number;
   problem_code: string;
@@ -41,6 +56,11 @@ export type ProblemRow = {
   students_graded: number;
   avg_best: number | null;
   distribution: DistributionBucket[];
+  // v2.1 fields — tolerant-optional at the normalizePayload boundary (utils.ts):
+  // a v2-only payload (backend not yet redeployed) defaults these to '' / [] / [].
+  problem_text: string;
+  students: ProblemStudentGrade[];
+  nodes: ProblemNode[];
 };
 
 export type CorrelationPoint = { turns: number; avg_best: number; email: string | null };
