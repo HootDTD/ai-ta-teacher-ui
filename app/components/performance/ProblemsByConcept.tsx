@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { CHART_COLOR_VAR, bandForLetter, formatScore, letterPillClass, studentLabel } from './utils';
+import { CHART_COLOR_VAR, bandForLetter, formatGap, formatScore, letterPillClass, studentLabel } from './utils';
 import type { ProblemNode, ProblemRow } from './types';
 
 // Stacked letter-distribution mini-bar for one problem. Segment widths are
@@ -103,6 +103,17 @@ function StudentGradeList({ students }: { students: ProblemRow['students'] }) {
           <span className="inline-flex items-center gap-1.5 shrink-0">
             <span className={`${letterPillClass(s.letter)} text-[11px]`}>{s.letter}</span>
             <span className="teacher-value tabular-nums">{Math.round(s.score)}</span>
+            {/* Retry suffix only for a pair that actually has a second graded
+                attempt — a single-attempt row stays exactly as it rendered
+                before P3.3 (and a pre-P3.3 backend defaults attempts to 0). */}
+            {s.attempts > 1 && (
+              <span
+                className="teacher-muted tabular-nums whitespace-nowrap text-[11px]"
+                title={`${s.attempts} graded attempts · median ${formatGap(s.median_gap_seconds)} between them`}
+              >
+                ×{s.attempts} · {formatGap(s.median_gap_seconds)}
+              </span>
+            )}
           </span>
         </li>
       ))}
