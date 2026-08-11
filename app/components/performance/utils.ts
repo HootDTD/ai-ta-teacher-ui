@@ -86,7 +86,7 @@ export function normalizePayload(raw: PerformancePayload): PerformancePayload {
       students: p.students ?? [],
       nodes: p.nodes ?? [],
     })),
-    insights: raw.insights ?? { correlation: null, effort_quartiles: null, retry_payoff: null },
+    insights: raw.insights ?? { correlation: null, effort_quartiles: null, retry_payoff: null, retry_timing: null },
     students: (raw.students ?? []).map((s) => ({
       ...s,
       engagement:
@@ -128,5 +128,10 @@ export const FLAG_META: Record<AttentionFlag, { label: string; title: string }> 
   grinding: {
     label: 'Grinding',
     title: 'Three or more graded attempts on a problem with little to no score improvement',
+  },
+  rapid_retry: {
+    label: 'Fast retry',
+    title:
+      'Retried a problem within 5 minutes and jumped at least one letter band — read the transcript before trusting the higher grade',
   },
 };

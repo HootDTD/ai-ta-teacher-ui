@@ -36,7 +36,17 @@ function drilldownForLetter(letter: string, problems: ProblemRow[], students: St
     for (const bg of s.best_grades) {
       if (bg.letter !== letter) continue;
       const list = byProblem.get(bg.problem_id) ?? [];
-      list.push({ user_id: s.user_id, email: s.email, score: bg.score, letter: bg.letter });
+      // Synthesized from top-level best_grades (v2-only-backend fallback path,
+      // see file header comment) — no per-attempt retry data at this
+      // granularity, so default the same way normalizePayload does.
+      list.push({
+        user_id: s.user_id,
+        email: s.email,
+        score: bg.score,
+        letter: bg.letter,
+        attempts: 0,
+        median_gap_seconds: null,
+      });
       byProblem.set(bg.problem_id, list);
     }
   }
