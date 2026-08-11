@@ -243,7 +243,8 @@ function RetryTimingStrip({ timing }: { timing: Insights['retry_timing'] }) {
         </div>
       </div>
       <p className="text-[11px] teacher-muted">
-        A rapid flip is a problem retried within 5 minutes that jumped at least one letter band.
+        Counts are per student-problem pair — the same problem retried by three students counts three times. A rapid
+        flip is a pair retried within 5 minutes that jumped at least one letter band.
       </p>
     </div>
   );
