@@ -1,4 +1,4 @@
-import { bandForScore, CHART_COLOR_VAR, formatScore, formatSigned, MIN_CORRELATION_N } from './utils';
+import { bandForScore, CHART_COLOR_VAR, formatGap, formatScore, formatSigned, MIN_CORRELATION_N } from './utils';
 import type { Insights } from './types';
 
 // Scatter is the flagship chart in this card — roughly double the height of a
@@ -201,6 +201,54 @@ function RetryPayoffStrip({ payoff }: { payoff: Insights['retry_payoff'] }) {
   );
 }
 
+function RetryTimingStrip({ timing }: { timing: Insights['retry_timing'] }) {
+  if (!timing) {
+    // Deliberately NOT the payoff strip's "No repeated attempts yet." — with
+    // both strips in the same column a teacher must be able to tell which
+    // signal is missing.
+    return (
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold teacher-value">Retry timing</h3>
+        <p className="text-sm teacher-muted">
+          No attempt spacing to show — no problem has a second graded attempt yet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold teacher-value">Retry timing</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs teacher-muted">Problems retried</p>
+          <p className="text-lg font-semibold teacher-value">{timing.pairs_retried}</p>
+        </div>
+        <div>
+          <p className="text-xs teacher-muted">Median gap</p>
+          <p className="text-lg font-semibold teacher-value">{formatGap(timing.median_gap_seconds)}</p>
+        </div>
+        <div>
+          <p className="text-xs teacher-muted">Shortest gap</p>
+          <p className="text-lg font-semibold teacher-value">{formatGap(timing.min_gap_seconds)}</p>
+        </div>
+        <div>
+          <p className="text-xs teacher-muted">Rapid flips</p>
+          <p
+            className="text-lg font-semibold teacher-value"
+            style={timing.rapid_flips > 0 ? { color: CHART_COLOR_VAR.red } : undefined}
+          >
+            {timing.rapid_flips}
+          </p>
+        </div>
+      </div>
+      <p className="text-[11px] teacher-muted">
+        A rapid flip is a problem retried within 5 minutes that jumped at least one letter band.
+      </p>
+    </div>
+  );
+}
+
 export default function EngagementInsights({ insights }: { insights: Insights }) {
   return (
     <div className="rounded-3xl teacher-panel-soft p-5 space-y-5">
@@ -218,6 +266,7 @@ export default function EngagementInsights({ insights }: { insights: Insights })
         <div className="space-y-5">
           <EffortQuartiles quartiles={insights.effort_quartiles} />
           <RetryPayoffStrip payoff={insights.retry_payoff} />
+          <RetryTimingStrip timing={insights.retry_timing} />
         </div>
       </div>
     </div>
