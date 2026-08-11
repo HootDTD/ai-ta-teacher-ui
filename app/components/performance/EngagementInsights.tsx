@@ -210,7 +210,7 @@ function RetryTimingStrip({ timing }: { timing: Insights['retry_timing'] }) {
       <div className="space-y-1">
         <h3 className="text-sm font-semibold teacher-value">Retry timing</h3>
         <p className="text-sm teacher-muted">
-          No attempt spacing to show — no problem has a second graded attempt yet.
+          No attempt spacing to show yet — spacing appears once retried attempts are timestamped.
         </p>
       </div>
     );

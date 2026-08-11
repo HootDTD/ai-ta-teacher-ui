@@ -101,15 +101,19 @@ export default function StudentTable({ students, notStarted }: { students: Stude
                       <span className="text-xs teacher-muted">—</span>
                     ) : (
                       <span className="flex flex-wrap gap-1">
-                        {student.flags.map((flag) => (
-                          <span
-                            key={flag}
-                            className="teacher-pill teacher-pill--danger text-xs whitespace-nowrap"
-                            title={FLAG_META[flag].title}
-                          >
-                            {FLAG_META[flag].label}
-                          </span>
-                        ))}
+                        {student.flags.map((flag) => {
+                          const meta = FLAG_META[flag];
+                          if (!meta) return null; // unknown flag from a newer backend — never crash the page
+                          return (
+                            <span
+                              key={flag}
+                              className="teacher-pill teacher-pill--danger text-xs whitespace-nowrap"
+                              title={meta.title}
+                            >
+                              {meta.label}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                   </td>

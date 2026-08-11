@@ -82,11 +82,10 @@ shortest gap, rapid flips) that nulls under the same zero-retried-pairs gate
 as the payoff strip and carries its own distinct empty state; quartile
 `label` text rendered verbatim, never hardcoded; no LLM/Neo4j calls).
 `StudentTable` (label = `email ?? "Student " + id8`; default sort avg grade
-DESC via header toggle,
-null averages always last; compact flag badges with tooltips, Retried and
-Avg gain columns off `engagement.problems_retried` / `engagement.avg_gain`,
-and the `rapid_retry` flag (fast retry that jumped a letter band)) closes
-the section.
+DESC via header toggle, null averages always last; compact flag badges with
+tooltips, Retried and Avg gain columns off `engagement.problems_retried` /
+`engagement.avg_gain`, and the `rapid_retry` flag (fast retry that jumped a
+letter band)) closes the section.
 
 Shared label/color/format helpers (`studentLabel`, `letterPillClass`,
 `bandForLetter`, `bandForScore`, `formatWhen`, `formatDayTick`,

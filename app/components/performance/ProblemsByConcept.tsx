@@ -108,7 +108,7 @@ function StudentGradeList({ students }: { students: ProblemRow['students'] }) {
     <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
       {students.map((s) => (
         <li key={s.user_id} className="flex items-center justify-between gap-2 py-1 text-xs">
-          <span className="teacher-value truncate">{studentLabel(s)}</span>
+          <span className="teacher-value truncate min-w-0">{studentLabel(s)}</span>
           <span className="inline-flex items-center gap-1.5 shrink-0">
             <span className={`${letterPillClass(s.letter)} text-[11px]`}>{s.letter}</span>
             <span className="teacher-value tabular-nums">{Math.round(s.score)}</span>
