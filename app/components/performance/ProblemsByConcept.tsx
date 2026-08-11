@@ -37,7 +37,7 @@ function DistributionBar({ distribution }: { distribution: ProblemRow['distribut
 // as the rest of the section, reusing CHART_COLOR_VAR (dataviz skill: never
 // hardcode hex).
 function NodeStackedBar({ node }: { node: ProblemNode }) {
-  const total = node.understood + node.partial + node.missed;
+  const total = node.understood + node.partial + node.missed + node.unprobed;
   if (total === 0) {
     return <div className="h-2.5 rounded" style={{ background: 'var(--pill-bg)' }} />;
   }
@@ -45,11 +45,16 @@ function NodeStackedBar({ node }: { node: ProblemNode }) {
     <div
       className="flex h-2.5 rounded overflow-hidden"
       style={{ background: 'var(--pill-bg)', gap: '2px' }}
-      title={`Understood: ${node.understood}, Partial: ${node.partial}, Missed: ${node.missed}`}
+      title={`Understood: ${node.understood}, Partial: ${node.partial}, Missed: ${node.missed}, Not probed: ${node.unprobed}`}
     >
       {node.understood > 0 && <div style={{ flex: `${node.understood} 0 0px`, background: CHART_COLOR_VAR.green }} />}
       {node.partial > 0 && <div style={{ flex: `${node.partial} 0 0px`, background: CHART_COLOR_VAR.blue }} />}
       {node.missed > 0 && <div style={{ flex: `${node.missed} 0 0px`, background: CHART_COLOR_VAR.red }} />}
+      {/* --muted is the reserved absent/in-progress token, never a 4th chart
+          color: these attempts were never asked about this node, so counting
+          them as missed would tell the teacher the class failed a topic it
+          never saw. */}
+      {node.unprobed > 0 && <div style={{ flex: `${node.unprobed} 0 0px`, background: 'var(--muted)' }} />}
     </div>
   );
 }
@@ -73,16 +78,20 @@ function NodeTable({ nodes }: { nodes: ProblemNode[] }) {
           <span className="h-2.5 w-2.5 rounded" style={{ background: CHART_COLOR_VAR.red }} />
           Missed
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded" style={{ background: 'var(--muted)' }} />
+          Not probed
+        </span>
       </div>
       <div className="space-y-1.5">
         {nodes.map((node) => (
-          <div key={node.node_id} className="grid grid-cols-[1fr_9rem_5rem] items-center gap-2.5">
+          <div key={node.node_id} className="grid grid-cols-[1fr_9rem_6.5rem] items-center gap-2.5">
             <span className="text-xs teacher-value truncate" title={node.display_name}>
               {node.display_name}
             </span>
             <NodeStackedBar node={node} />
             <span className="text-[11px] text-right teacher-muted tabular-nums">
-              {node.understood}/{node.partial}/{node.missed}
+              {node.understood}/{node.partial}/{node.missed}/{node.unprobed}
             </span>
           </div>
         ))}
