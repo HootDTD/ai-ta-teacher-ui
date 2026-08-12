@@ -77,16 +77,31 @@ export function formatDayTick(day: string, prevDay: string | null): string {
 // adds problem_text/students/nodes to each problems[] row; a v2-only payload
 // (problems present, new fields absent) must render those as empty text/[]
 // rather than crash — same deploy-skew tolerance, one field-set deeper.
+//
+// P3.3 adds a third skew layer: insights.retry_timing, per-(student, problem)
+// attempts/median_gap_seconds, and nodes[].unprobed. A backend that predates
+// P3.3 omits all four; each gets a default here so no component ever sees
+// undefined (which would render NaN through Math.round or a bare "undefined"
+// in a template literal).
 export function normalizePayload(raw: PerformancePayload): PerformancePayload {
   return {
     ...raw,
     problems: (raw.problems ?? []).map((p) => ({
       ...p,
       problem_text: p.problem_text ?? '',
-      students: p.students ?? [],
-      nodes: p.nodes ?? [],
+      students: (p.students ?? []).map((s) => ({
+        ...s,
+        attempts: s.attempts ?? 0,
+        median_gap_seconds: s.median_gap_seconds ?? null,
+      })),
+      nodes: (p.nodes ?? []).map((n) => ({
+        ...n,
+        unprobed: n.unprobed ?? 0,
+      })),
     })),
-    insights: raw.insights ?? { correlation: null, effort_quartiles: null, retry_payoff: null },
+    insights: raw.insights
+      ? { ...raw.insights, retry_timing: raw.insights.retry_timing ?? null }
+      : { correlation: null, effort_quartiles: null, retry_payoff: null, retry_timing: null },
     students: (raw.students ?? []).map((s) => ({
       ...s,
       engagement:
@@ -113,6 +128,22 @@ export function formatSigned(n: number | null | undefined): string {
   return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
+// A DURATION between two attempts, not an absolute timestamp (formatWhen does
+// those). One unit only, rounded to nearest, so the value stays 2-3 characters
+// inside a table cell: "42s" / "12m" / "5h" / "3d". null — no second graded
+// attempt, or a pre-P3.3 backend — reads as the same em dash every other
+// absent value uses. A gap within half a unit of a bucket edge renders as
+// "60s"/"60m" rather than cascading to the next unit; that is the literal
+// bucket contract and these numbers are display-only.
+export function formatGap(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return '—';
+  const s = Math.max(0, seconds);
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86400)}d`;
+}
+
 // Labels are kept to one short word/token so the compact badge never wraps
 // inside the Student-table Flags column — full detail rides the tooltip.
 export const FLAG_META: Record<AttentionFlag, { label: string; title: string }> = {
@@ -128,5 +159,10 @@ export const FLAG_META: Record<AttentionFlag, { label: string; title: string }> 
   grinding: {
     label: 'Grinding',
     title: 'Three or more graded attempts on a problem with little to no score improvement',
+  },
+  rapid_retry: {
+    label: 'Fast retry',
+    title:
+      'Retried a problem within 5 minutes and jumped at least one letter band — read the transcript before trusting the higher grade',
   },
 };

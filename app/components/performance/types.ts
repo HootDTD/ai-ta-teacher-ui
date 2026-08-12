@@ -5,7 +5,7 @@
 
 export type BestGrade = { problem_id: number; score: number; letter: string };
 
-export type AttentionFlag = 'not_started' | 'low_effort' | 'gave_up' | 'grinding';
+export type AttentionFlag = 'not_started' | 'low_effort' | 'gave_up' | 'grinding' | 'rapid_retry';
 
 export type StudentEngagement = {
   teaching_turns: number;
@@ -36,7 +36,18 @@ export type DistributionBucket = { letter: string; count: number };
 // v2.1 additive types (design spec "v2.1 addendum"). Populated per-problem —
 // the best-wins row per student for that problem, and per-reference-graph-node
 // right/wrong counts reusing the same credit logic the scorer uses.
-export type ProblemStudentGrade = { user_id: string; email: string | null; score: number; letter: string };
+export type ProblemStudentGrade = {
+  user_id: string;
+  email: string | null;
+  score: number;
+  letter: string;
+  // P3.3 retry visibility (additive): graded-attempt count for this
+  // (student, problem) pair and the median seconds between those graded
+  // attempts (null below 2 graded attempts). Tolerant at the
+  // normalizePayload boundary — a pre-P3.3 backend defaults them to 0 / null.
+  attempts: number;
+  median_gap_seconds: number | null;
+};
 
 export type ProblemNode = {
   node_id: string;
@@ -45,6 +56,10 @@ export type ProblemNode = {
   understood: number;
   partial: number;
   missed: number;
+  // Attempts whose OWN grade excluded this node (P1.2b): counted here and
+  // nowhere else, so `graded` stays understood + partial + missed — the
+  // population the letter distribution beside it is computed over.
+  unprobed: number;
   graded: number;
 };
 
@@ -81,10 +96,22 @@ export type RetryPayoff = {
   avg_gain: number;
 } | null;
 
+// P3.3 class-level retry timing. Nulls under the SAME gate as RetryPayoff
+// (zero retried pairs) — never under MIN_CORRELATION_N — so the two strips
+// appear and disappear together. `rapid_flips` is the class tally of the
+// same signal the per-student `rapid_retry` flag marks.
+export type RetryTiming = {
+  pairs_retried: number;
+  median_gap_seconds: number | null;
+  min_gap_seconds: number | null;
+  rapid_flips: number;
+} | null;
+
 export type Insights = {
   correlation: Correlation;
   effort_quartiles: EffortQuartile[] | null;
   retry_payoff: RetryPayoff;
+  retry_timing: RetryTiming;
 };
 
 export type PerformancePayload = {
