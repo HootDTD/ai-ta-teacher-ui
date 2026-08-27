@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { FLAG_META, formatWhen, letterPillClass, studentLabel } from './utils';
+import { FLAG_META, formatSigned, formatWhen, letterPillClass, studentLabel } from './utils';
 import type { StudentRow } from './types';
 
 type SortDir = 'asc' | 'desc';
@@ -53,6 +53,15 @@ export default function StudentTable({ students, notStarted }: { students: Stude
                 </th>
                 <th className="py-1.5 px-2 font-medium text-right">Problems graded</th>
                 <th className="py-1.5 px-2 font-medium text-right">Attempts</th>
+                <th className="py-1.5 px-2 font-medium text-right" title="Problems with more than one graded attempt">
+                  Retried
+                </th>
+                <th
+                  className="py-1.5 px-2 font-medium text-right"
+                  title="Average score change from first graded attempt to best graded attempt"
+                >
+                  Avg gain
+                </th>
                 <th className="py-1.5 px-2 font-medium text-right">Teaching turns</th>
                 <th className="py-1.5 px-2 font-medium text-right">Words/msg</th>
                 <th className="py-1.5 px-2 font-medium">Flags</th>
@@ -75,6 +84,14 @@ export default function StudentTable({ students, notStarted }: { students: Stude
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums">{student.best_grades.length}</td>
                   <td className="py-2 px-2 text-right tabular-nums">{student.attempts}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{student.engagement.problems_retried}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">
+                    {student.engagement.avg_gain !== null ? (
+                      formatSigned(student.engagement.avg_gain)
+                    ) : (
+                      <span className="teacher-muted">—</span>
+                    )}
+                  </td>
                   <td className="py-2 px-2 text-right tabular-nums">{student.engagement.teaching_turns}</td>
                   <td className="py-2 px-2 text-right tabular-nums">
                     {student.engagement.median_words !== null ? student.engagement.median_words.toFixed(1) : '—'}
@@ -84,15 +101,19 @@ export default function StudentTable({ students, notStarted }: { students: Stude
                       <span className="text-xs teacher-muted">—</span>
                     ) : (
                       <span className="flex flex-wrap gap-1">
-                        {student.flags.map((flag) => (
-                          <span
-                            key={flag}
-                            className="teacher-pill teacher-pill--danger text-xs whitespace-nowrap"
-                            title={FLAG_META[flag].title}
-                          >
-                            {FLAG_META[flag].label}
-                          </span>
-                        ))}
+                        {student.flags.map((flag) => {
+                          const meta = FLAG_META[flag];
+                          if (!meta) return null; // unknown flag from a newer backend — never crash the page
+                          return (
+                            <span
+                              key={flag}
+                              className="teacher-pill teacher-pill--danger text-xs whitespace-nowrap"
+                              title={meta.title}
+                            >
+                              {meta.label}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                   </td>

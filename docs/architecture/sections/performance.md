@@ -13,7 +13,7 @@ owns:
   - app/components/performance/RubricLossBars.tsx
   - app/components/performance/StudentTable.tsx
 related: [sections/_index, api/classroom, shell/console-orchestrator]
-last_verified: 2026-07-31
+last_verified: 2026-08-11
 stub: false
 ---
 
@@ -46,7 +46,13 @@ a v1 payload (no `problems`/`insights`/`engagement`/`flags`) renders as empty
 states, not a crash, and — one field-set deeper — a v2-only payload (`problems`
 present but each row missing the v2.1 `problem_text`/`students`/`nodes`
 fields) defaults those to `''`/`[]`/`[]` per row, so both the older and the
-current backend deploy skew are tolerated without a crash.
+current backend deploy skew are tolerated without a crash. P3.3 adds a third
+skew layer on the same boundary: `insights.retry_timing` (class retry
+spacing), `problems[].students[].attempts` + `median_gap_seconds` (per
+student × problem), and the overdue `problems[].nodes[].unprobed` catch-up
+all default to `null` / `0` / `null` / `0` in `normalizePayload`, so a
+backend that predates the P3.3 projection change renders the panel exactly
+as before rather than `NaN`.
 
 Rendered blocks, each its own component: `StatTiles` (enrolled/active,
 attempts/graded, class average, not-started), `GradeDistribution` (every
@@ -59,18 +65,27 @@ showing the `problem_text` snippet — 1-2 line clamp, `title` attr for the
 full text, never the opaque `problem_code` — plus the distribution mini-bar +
 avg + n; expands to the full text (plain text, line breaks preserved — no
 math/markdown renderer in this repo), a per-node understood/partial/missed
-breakdown, and the per-student grade list; supersedes the v1 concept-rollup
-table). Then `ActivityByDay` (stacked graded/in-progress bars; x-axis ticks
-via `formatDayTick` — day-of-month alone, month spelled out only at the
-first tick or a rollover, so 10+ bars never truncate), `RubricLossBars` (3
-axes, `misconception_corrected` removed; a compact full-width strip), and
+breakdown, and the per-student grade list, each per-student row carrying a
+`×N · gap` suffix (attempt count + median spacing via `formatGap`) whenever
+that pair has more than one graded attempt; the per-node breakdown renders
+four states — understood / partial / missed / **not probed**, the last in
+the reserved `--muted` token because those attempts were never asked about
+the node; supersedes the v1 concept-rollup table). Then `ActivityByDay`
+(stacked graded/in-progress bars; x-axis ticks via `formatDayTick` —
+day-of-month alone, month spelled out only at the first tick or a rollover,
+so 10+ bars never truncate), `RubricLossBars` (3 axes,
+`misconception_corrected` removed; a compact full-width strip), and
 `EngagementInsights` (algorithmic-only: teaching-turns-vs-grade scatter with
 real axis titles + Pearson r / Spearman ρ / n, plus effort-quartile bars +
-retry-payoff strip; quartile `label` text rendered verbatim, never
-hardcoded; no LLM/Neo4j calls). `StudentTable` (label =
-`email ?? "Student " + id8`; default sort avg grade DESC via header toggle,
-null averages always last; compact flag badges with tooltips) closes the
-section.
+retry-payoff strip, plus a retry-timing strip (problems retried, median gap,
+shortest gap, rapid flips) that nulls under the same zero-retried-pairs gate
+as the payoff strip and carries its own distinct empty state; quartile
+`label` text rendered verbatim, never hardcoded; no LLM/Neo4j calls).
+`StudentTable` (label = `email ?? "Student " + id8`; default sort avg grade
+DESC via header toggle, null averages always last; compact flag badges with
+tooltips, Retried and Avg gain columns off `engagement.problems_retried` /
+`engagement.avg_gain`, and the `rapid_retry` flag (fast retry that jumped a
+letter band)) closes the section.
 
 Shared label/color/format helpers (`studentLabel`, `letterPillClass`,
 `bandForLetter`, `bandForScore`, `formatWhen`, `formatDayTick`,
@@ -106,3 +121,11 @@ block computes grade-band color and date/label formatting the same way.
   tracks one open letter (re-click or its Close button dismisses it). Node
   right/wrong bars reuse the same green/blue/red `CHART_COLOR_VAR` tokens as
   the rest of the section (understood/partial/missed), never a new palette.
+- Retry timings are **display-only**. Best-attempt-wins selection happens in
+  the backend and is ordered by attempt id, never by `created_at`; no
+  component here sorts, ranks, or picks a row using a gap value, and the new
+  columns are deliberately not sortable (`avg_best` stays the only sort key).
+- `formatGap` renders a duration in ONE unit (`42s` / `12m` / `5h` / `3d`,
+  `null` → em dash) — distinct from `formatWhen`, which formats an absolute
+  timestamp. A value within half a unit of a bucket edge renders as `60s`
+  rather than cascading; that is the intended bucket contract.
