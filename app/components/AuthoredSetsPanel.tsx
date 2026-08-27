@@ -39,6 +39,54 @@ type ReviewDraft = {
   reference_solution: ReferenceStep[] | null;
 };
 
+// Mirrors apollo/ontology/edges.py Edge.model_dump() as emitted by
+// Problem.to_kg_graph() into typed_confirmation.draft.edges.
+type KGEdge = {
+  edge_type: 'PRECEDES' | 'USES' | 'DEPENDS_ON' | 'SCOPES';
+  from_node_id: string;
+  to_node_id: string;
+  from_node_type?: string | null;
+  to_node_type?: string | null;
+  provenance?: 'explicit' | 'inferred';
+};
+
+type TypedConfirmationDraft = {
+  steps: ReferenceStep[];
+  edges: KGEdge[];
+  solution: string;
+};
+
+// Mirrors provenance.typed_confirmation written by
+// apollo/provisioning/orchestrator.py + confirm_typed_problem in
+// apollo/provisioning/authored_sets/api.py.
+type TypedConfirmation = {
+  status: 'awaiting_teacher_confirmation' | 'teacher_confirmed' | 'teacher_confirmed_not_promoted';
+  constructed_at: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  diagnostics: string[];
+  draft: TypedConfirmationDraft;
+  diagnostic?: string;
+};
+
+// Mirrors provenance.typed_rehoming written by
+// apollo/provisioning/authored_sets/rehoming.py.
+type TypedRehoming = {
+  status: 'rehoming_pending' | 'rehoming_running' | 'rehoming_complete' | 'rehoming_failed';
+  diagnostic: string;
+  job_id: number | null;
+  requested_concept_id?: number | null;
+  review_required?: boolean;
+  retryable?: boolean;
+};
+
+// Whitelisted projection of /apollo/teacher/concepts — the same list used to
+// enforce "never display the provisional category" (excluded server-side).
+type ConceptOption = {
+  id: number;
+  display_name: string;
+};
+
 // Whitelisted projection of the backend's provenance.authored_review; absent on
 // responses from backends predating the review-enrichment deploy.
 type ProblemReview = {
@@ -52,7 +100,7 @@ type ProblemReview = {
 
 type AuthoredProblemResult = {
   label: string | null;
-  outcome: 'promoted' | 'rejected' | 'held_for_review';
+  outcome: 'promoted' | 'rejected' | 'held_for_review' | 'awaiting_teacher_confirmation' | 'discarded';
   solution_source: string | null;
   match_method: string | null;
   ocr_confidence: number | null;
@@ -68,6 +116,8 @@ type AuthoredProblemResult = {
   review?: ProblemReview | null;
   rejected_problem_id?: number;
   rejected_stage?: string;
+  confirmation?: TypedConfirmation | null;
+  rehoming?: TypedRehoming | null;
 };
 
 type AuthoredSetDetail = AuthoredSetSummary & {
@@ -83,9 +133,16 @@ type ApproveState =
   | { status: 'approved'; reference: 'ocr' | 'generated' }
   | { status: 'error'; message: string };
 
+type TypedActionState = { status: 'pending' } | { status: 'error'; message: string };
+
+type ConfirmTypedResponse =
+  | { promoted: true; failed_gate: number | null; diagnostic: string; rehoming: string; job_id: number }
+  | { promoted: false; outcome: 'held_for_review' | 'rejected'; failed_gate: number | null; diagnostic: string };
+
 type ManualAuthoredSetRequest = {
   search_space_id: number;
   problems: { problem_text: string; solution_text?: string }[];
+  replace_problem_id?: number;
 };
 
 type ManualAuthoredSetResponse = {
@@ -192,6 +249,9 @@ export default function AuthoredSetsPanel({
   const [approveState, setApproveState] = useState<Record<number, ApproveState>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [concepts, setConcepts] = useState<ConceptOption[]>([]);
+  const [typedActionState, setTypedActionState] = useState<Record<number, TypedActionState>>({});
+  const [assignActionState, setAssignActionState] = useState<Record<number, TypedActionState>>({});
 
   const authHeaders = useCallback(
     (extra?: Record<string, string>): Record<string, string> => ({
@@ -212,6 +272,23 @@ export default function AuthoredSetsPanel({
       setSets(Array.isArray(data?.sets) ? data.sets : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load authored sets');
+    }
+  }, [accessToken, searchSpaceId, authHeaders]);
+
+  // Existing-concept selector for rehoming_failed assignment. The backend list
+  // already excludes the shared provisional-inventory slug — no client-side
+  // filtering needed to satisfy "never display the provisional category."
+  const fetchConcepts = useCallback(async () => {
+    if (!accessToken || !searchSpaceId) return;
+    try {
+      const resp = await fetch(`/api/teacher/concepts?search_space_id=${searchSpaceId}`, {
+        headers: authHeaders(),
+      });
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Failed to load concepts'));
+      const data = await resp.json();
+      setConcepts(Array.isArray(data?.concepts) ? data.concepts : []);
+    } catch {
+      // Non-fatal: the assign selector just shows empty until the next poll.
     }
   }, [accessToken, searchSpaceId, authHeaders]);
 
@@ -237,8 +314,12 @@ export default function AuthoredSetsPanel({
     setDetails({});
     setExpandedId(null);
     setApproveState({});
+    setConcepts([]);
+    setTypedActionState({});
+    setAssignActionState({});
     void fetchSets();
-  }, [fetchSets]);
+    void fetchConcepts();
+  }, [fetchSets, fetchConcepts]);
 
   // Poll while any set is still indexing/provisioning, refreshing the open detail too.
   useEffect(() => {
@@ -405,6 +486,128 @@ export default function AuthoredSetsPanel({
     return updated;
   };
 
+  const handleConfirmTyped = async (setId: number, problemId: number) => {
+    setTypedActionState((prev) => ({ ...prev, [problemId]: { status: 'pending' } }));
+    try {
+      const resp = await fetch(`/api/teacher/authored-sets/${setId}/problems/${problemId}/confirm`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Approve failed'));
+      const data: ConfirmTypedResponse = await resp.json();
+      if (!data.promoted) {
+        throw new Error(
+          typeof data.diagnostic === 'string' && data.diagnostic
+            ? `Could not promote: ${data.diagnostic}`
+            : 'Could not promote this problem.',
+        );
+      }
+      setTypedActionState((prev) => {
+        const next = { ...prev };
+        delete next[problemId];
+        return next;
+      });
+      await Promise.all([fetchDetail(setId), fetchSets()]);
+    } catch (err) {
+      setTypedActionState((prev) => ({
+        ...prev,
+        [problemId]: { status: 'error', message: err instanceof Error ? err.message : 'Approve failed' },
+      }));
+    }
+  };
+
+  const handleDiscardTyped = async (setId: number, problemId: number) => {
+    setTypedActionState((prev) => ({ ...prev, [problemId]: { status: 'pending' } }));
+    try {
+      const resp = await fetch(`/api/teacher/authored-sets/${setId}/problems/${problemId}/discard`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Discard failed'));
+      setTypedActionState((prev) => {
+        const next = { ...prev };
+        delete next[problemId];
+        return next;
+      });
+      await Promise.all([fetchDetail(setId), fetchSets()]);
+    } catch (err) {
+      setTypedActionState((prev) => ({
+        ...prev,
+        [problemId]: { status: 'error', message: err instanceof Error ? err.message : 'Discard failed' },
+      }));
+    }
+  };
+
+  // Edit & resubmit is a fresh manual submission: the backend discards the old
+  // pending draft server-side (replace_problem_id) and provisions a brand new
+  // authored set, so this opens/refreshes that new set the same way the "Write
+  // a problem" form does.
+  const handleEditResubmitTyped = async (
+    setId: number,
+    problemId: number,
+    problemText: string,
+    solutionText: string,
+  ) => {
+    setTypedActionState((prev) => ({ ...prev, [problemId]: { status: 'pending' } }));
+    try {
+      const request: ManualAuthoredSetRequest = {
+        search_space_id: searchSpaceId,
+        problems: [
+          {
+            problem_text: problemText,
+            ...(solutionText.trim() ? { solution_text: solutionText.trim() } : {}),
+          },
+        ],
+        replace_problem_id: problemId,
+      };
+      const resp = await fetch('/api/teacher/authored-sets/manual', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(request),
+      });
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Resubmit failed'));
+      const created: ManualAuthoredSetResponse = await resp.json();
+      setTypedActionState((prev) => {
+        const next = { ...prev };
+        delete next[problemId];
+        return next;
+      });
+      setExpandedId(created.set_id);
+      await Promise.all([fetchDetail(setId), fetchDetail(created.set_id), fetchSets()]);
+    } catch (err) {
+      setTypedActionState((prev) => ({
+        ...prev,
+        [problemId]: { status: 'error', message: err instanceof Error ? err.message : 'Resubmit failed' },
+      }));
+    }
+  };
+
+  const handleAssignConcept = async (setId: number, problemId: number, conceptId: number) => {
+    setAssignActionState((prev) => ({ ...prev, [problemId]: { status: 'pending' } }));
+    try {
+      const resp = await fetch(
+        `/api/teacher/authored-sets/${setId}/problems/${problemId}/rehoming/assign`,
+        {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ concept_id: conceptId }),
+        },
+      );
+      if (!resp.ok) throw new Error(await readErrorDetail(resp, 'Assign failed'));
+      setAssignActionState((prev) => {
+        const next = { ...prev };
+        delete next[problemId];
+        return next;
+      });
+      await fetchDetail(setId);
+    } catch (err) {
+      setAssignActionState((prev) => ({
+        ...prev,
+        [problemId]: { status: 'error', message: err instanceof Error ? err.message : 'Assign failed' },
+      }));
+    }
+  };
+
   return (
     <div className="rounded-3xl teacher-panel-soft p-5">
       <div className="flex items-center justify-between">
@@ -511,7 +714,13 @@ export default function AuthoredSetsPanel({
             }
             return live;
           })();
-          const heldCount = counts?.held_for_review ?? 0;
+          const rehomingFailedCount = (problems ?? []).filter(
+            (p) => p.rehoming?.status === 'rehoming_failed',
+          ).length;
+          const heldCount =
+            (counts?.held_for_review ?? 0) +
+            (counts?.awaiting_teacher_confirmation ?? 0) +
+            rehomingFailedCount;
           return (
             <div key={set.set_id} className="rounded-2xl teacher-panel-subtle p-4">
               <div className="flex items-center gap-2">
@@ -614,6 +823,42 @@ export default function AuthoredSetsPanel({
                           onApprove={(reference) => {
                             if (problem.concept_problem_id != null) {
                               void handleApprove(set.set_id, problem.concept_problem_id, reference);
+                            }
+                          }}
+                          typedActionState={
+                            problem.concept_problem_id != null
+                              ? typedActionState[problem.concept_problem_id]
+                              : undefined
+                          }
+                          onConfirmTyped={() => {
+                            if (problem.concept_problem_id != null) {
+                              void handleConfirmTyped(set.set_id, problem.concept_problem_id);
+                            }
+                          }}
+                          onDiscardTyped={() => {
+                            if (problem.concept_problem_id != null) {
+                              void handleDiscardTyped(set.set_id, problem.concept_problem_id);
+                            }
+                          }}
+                          onEditResubmitTyped={(problemText, solutionText) => {
+                            if (problem.concept_problem_id != null) {
+                              void handleEditResubmitTyped(
+                                set.set_id,
+                                problem.concept_problem_id,
+                                problemText,
+                                solutionText,
+                              );
+                            }
+                          }}
+                          concepts={concepts}
+                          assignActionState={
+                            problem.concept_problem_id != null
+                              ? assignActionState[problem.concept_problem_id]
+                              : undefined
+                          }
+                          onAssignConcept={(conceptId) => {
+                            if (problem.concept_problem_id != null) {
+                              void handleAssignConcept(set.set_id, problem.concept_problem_id, conceptId);
                             }
                           }}
                         />
@@ -835,6 +1080,235 @@ function ProblemEditFields({
   );
 }
 
+function TypedConfirmationBody({
+  problem,
+  pending,
+  error,
+  onApprove,
+  onDiscard,
+  onEditResubmit,
+}: {
+  problem: AuthoredProblemResult;
+  pending: boolean;
+  error: string | null;
+  onApprove: () => void;
+  onDiscard: () => void;
+  onEditResubmit: (problemText: string, solutionText: string) => void;
+}) {
+  const draft = problem.confirmation?.draft;
+  const diagnostics = problem.confirmation?.diagnostics ?? [];
+  const [editing, setEditing] = useState(false);
+  const [problemText, setProblemText] = useState(problem.problem_text ?? '');
+  const [solutionText, setSolutionText] = useState(draft?.solution ?? '');
+
+  const beginEdit = () => {
+    setProblemText(problem.problem_text ?? '');
+    setSolutionText(draft?.solution ?? '');
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide teacher-muted">Question</span>
+          <textarea
+            required
+            rows={4}
+            value={problemText}
+            disabled={pending}
+            onChange={(event) => setProblemText(event.target.value)}
+            className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Answer (optional)
+          </span>
+          <textarea
+            rows={3}
+            value={solutionText}
+            disabled={pending}
+            onChange={(event) => setSolutionText(event.target.value)}
+            className="teacher-input rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+          />
+        </label>
+        {error && (
+          <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+            {error}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pending || !problemText.trim()}
+            onClick={() => onEditResubmit(problemText, solutionText)}
+            className="teacher-button-primary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+            {pending ? 'Resubmitting…' : 'Resubmit'}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => setEditing(false)}
+            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <QuestionText problem={problem} />
+      {draft && Array.isArray(draft.steps) && (
+        <ReferenceSolutionPreview heading="Draft reference solution" steps={draft.steps} />
+      )}
+      {draft && Array.isArray(draft.edges) && draft.edges.length > 0 && (
+        <div className="rounded-xl teacher-panel-soft px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Derived graph edges
+          </div>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {draft.edges.map((edge, idx) => (
+              <li
+                key={`${edge.from_node_id}-${edge.to_node_id}-${edge.edge_type}-${idx}`}
+                className="text-xs teacher-muted"
+              >
+                {edge.from_node_id} → {edge.to_node_id}{' '}
+                <span className="font-medium">[{edge.edge_type}]</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {draft?.solution && (
+        <div className="rounded-xl teacher-panel-soft px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Authored solution
+          </div>
+          <p className="mt-1 whitespace-pre-wrap text-sm">{draft.solution}</p>
+        </div>
+      )}
+      {diagnostics.length > 0 && (
+        <div className="rounded-xl teacher-panel-soft px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+            Construction notes
+          </div>
+          <ul className="mt-1 list-disc pl-4 text-xs teacher-muted">
+            {diagnostics.map((item, idx) => (
+              <li key={idx}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+          {error}
+        </div>
+      )}
+      <p className="text-xs teacher-muted">
+        Review this constructed draft before it becomes teachable.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onApprove}
+          className="teacher-button-primary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+          {pending ? 'Approving…' : 'Approve'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={beginEdit}
+          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit & resubmit
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onDiscard}
+          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Discard
+        </button>
+      </div>
+    </>
+  );
+}
+
+function RehomingFailedBody({
+  diagnostic,
+  concepts,
+  pending,
+  error,
+  onAssign,
+}: {
+  diagnostic: string;
+  concepts: ConceptOption[];
+  pending: boolean;
+  error: string | null;
+  onAssign: (conceptId: number) => void;
+}) {
+  const [selected, setSelected] = useState('');
+
+  return (
+    <div className="rounded-xl teacher-panel-soft px-3 py-2">
+      <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+        Re-homing failed
+      </div>
+      <p className="mt-1 whitespace-pre-wrap text-sm">
+        {diagnostic || 'Automatic concept tagging could not place this problem.'}
+      </p>
+      <p className="mt-2 text-xs teacher-muted">
+        This problem stays teachable while unassigned. Pick an existing concept to move it there.
+      </p>
+      {error && (
+        <div className="mt-2 rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+          {error}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Select an existing concept"
+          value={selected}
+          disabled={pending || concepts.length === 0}
+          onChange={(event) => setSelected(event.target.value)}
+          className="teacher-input rounded-xl px-3 py-1.5 text-xs disabled:opacity-50"
+        >
+          <option value="">Select a concept…</option>
+          {concepts.map((concept) => (
+            <option key={concept.id} value={concept.id}>
+              {concept.display_name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={pending || !selected}
+          onClick={() => onAssign(Number(selected))}
+          className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+          {pending ? 'Assigning…' : 'Assign'}
+        </button>
+      </div>
+      {concepts.length === 0 && (
+        <p className="mt-1 text-xs teacher-muted">No existing concepts found in this course yet.</p>
+      )}
+    </div>
+  );
+}
+
 function ProblemRow({
   bodyId,
   problem,
@@ -842,6 +1316,13 @@ function ProblemRow({
   onApprove,
   onGoToConcepts,
   onSave,
+  typedActionState,
+  onConfirmTyped,
+  onDiscardTyped,
+  onEditResubmitTyped,
+  concepts,
+  assignActionState,
+  onAssignConcept,
 }: {
   bodyId: string;
   problem: AuthoredProblemResult;
@@ -849,6 +1330,13 @@ function ProblemRow({
   onApprove: (reference: 'ocr' | 'generated') => void;
   onGoToConcepts?: () => void;
   onSave: (request: ProblemEditRequest) => Promise<EditedProblemResponse>;
+  typedActionState: TypedActionState | undefined;
+  onConfirmTyped: () => void;
+  onDiscardTyped: () => void;
+  onEditResubmitTyped: (problemText: string, solutionText: string) => void;
+  concepts: ConceptOption[];
+  assignActionState: TypedActionState | undefined;
+  onAssignConcept: (conceptId: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -863,6 +1351,9 @@ function ProblemRow({
   const reason = problem.review?.reason ?? problem.reason;
   const pending = approveState?.status === 'pending';
   const review = problem.review;
+  const isAwaitingConfirmation = outcome === 'awaiting_teacher_confirmation';
+  const isDiscarded = outcome === 'discarded';
+  const rehomingFailed = problem.rehoming?.status === 'rehoming_failed';
   const buttons: { reference: 'ocr' | 'generated'; label: string; draft: ReviewDraft | null }[] = [];
   if (outcome === 'held_for_review' && review) {
     if (review.ocr_draft) {
@@ -894,14 +1385,19 @@ function ProblemRow({
 
   const approvedByTeacher =
     approveState?.status === 'approved' || Boolean(problem.review?.approved_reference);
-  const summary =
-    outcome === 'promoted'
+  const summary = isDiscarded
+    ? 'Discarded'
+    : outcome === 'promoted'
       ? approvedByTeacher
         ? 'Approved — now teachable'
-        : `Promoted${problem.solution_source ? ` · ${problem.solution_source}` : ''}${conf}`
+        : rehomingFailed
+          ? 'Promoted · re-homing failed — needs a concept'
+          : `Promoted${problem.solution_source ? ` · ${problem.solution_source}` : ''}${conf}`
       : outcome === 'rejected'
         ? `Rejected${problem.failed_gate != null ? ` · gate ${problem.failed_gate}` : ''}`
-        : `Held · ${holdReasonLabel(reason)}${conf}`;
+        : isAwaitingConfirmation
+          ? 'Awaiting your review'
+          : `Held · ${holdReasonLabel(reason)}${conf}`;
 
   const beginEdit = () => {
     setEditProblemText(problem.problem_text ?? '');
@@ -959,7 +1455,7 @@ function ProblemRow({
   };
 
   const cardClass =
-    outcome === 'held_for_review'
+    outcome === 'held_for_review' || isAwaitingConfirmation || rehomingFailed
       ? 'teacher-alert teacher-alert--warning'
       : outcome === 'rejected'
         ? 'teacher-alert teacher-alert--danger'
@@ -980,7 +1476,7 @@ function ProblemRow({
           ) : (
             <ChevronRight className="h-4 w-4 shrink-0" />
           )}
-          {outcome === 'promoted' ? (
+          {outcome === 'promoted' && !rehomingFailed ? (
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
           ) : outcome === 'rejected' ? (
             <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
@@ -992,7 +1488,7 @@ function ProblemRow({
             {summary}
           </span>
         </button>
-        {problem.concept_problem_id != null && (
+        {problem.concept_problem_id != null && !isAwaitingConfirmation && !isDiscarded && (
           <button
             type="button"
             aria-expanded={editing}
@@ -1009,117 +1505,153 @@ function ProblemRow({
 
       {expanded && (
         <div id={bodyId} className="mt-3 flex flex-col gap-2 border-t pt-3">
-          {editing ? (
-            <ProblemEditFields
-              bodyId={bodyId}
-              problemText={editProblemText}
-              steps={editSteps}
-              pending={editPending}
-              error={editError}
-              onProblemTextChange={setEditProblemText}
-              onStepStringChange={updateStepString}
-              onSave={() => void saveEdit()}
-              onCancel={cancelEdit}
+          {isAwaitingConfirmation ? (
+            <TypedConfirmationBody
+              problem={problem}
+              pending={typedActionState?.status === 'pending'}
+              error={typedActionState?.status === 'error' ? typedActionState.message : null}
+              onApprove={onConfirmTyped}
+              onDiscard={onDiscardTyped}
+              onEditResubmit={onEditResubmitTyped}
             />
+          ) : isDiscarded ? (
+            <p className="text-xs teacher-muted">This draft was discarded.</p>
           ) : (
             <>
-              <QuestionText problem={problem} />
-              {Array.isArray(problem.reference_solution) && (
-                <ReferenceSolutionPreview
-                  heading="Reference solution"
-                  steps={problem.reference_solution}
+              {editing ? (
+                <ProblemEditFields
+                  bodyId={bodyId}
+                  problemText={editProblemText}
+                  steps={editSteps}
+                  pending={editPending}
+                  error={editError}
+                  onProblemTextChange={setEditProblemText}
+                  onStepStringChange={updateStepString}
+                  onSave={() => void saveEdit()}
+                  onCancel={cancelEdit}
                 />
-              )}
-            </>
-          )}
-
-          {problem.solution_text && (
-            <div className="rounded-xl teacher-panel-soft px-3 py-2">
-              <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
-                Authored solution
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{problem.solution_text}</p>
-            </div>
-          )}
-
-          {outcome === 'rejected' && problem.diagnostic && (
-            <div className="rounded-xl teacher-panel-soft px-3 py-2">
-              <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
-                Diagnostic
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{problem.diagnostic}</p>
-            </div>
-          )}
-
-          {outcome === 'held_for_review' && reason === 'no_matching_concept' && (
-            <>
-              <p className="text-xs teacher-muted">
-                This question didn&apos;t match any concept in your course list, so no solution was
-                drafted. Add the missing concept in the Concepts section, then re-upload this set.
-              </p>
-              {onGoToConcepts && (
-                <button
-                  type="button"
-                  onClick={onGoToConcepts}
-                  className="teacher-button-secondary self-start rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5"
-                >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Go to Concepts
-                </button>
-              )}
-            </>
-          )}
-
-          {outcome === 'held_for_review' && reason !== 'no_matching_concept' && (
-            <>
-              {buttons.map(
-                (button) =>
-                  button.draft && (
-                    <DraftPreview
-                      key={`draft-${button.reference}`}
-                      heading={
-                        button.reference === 'generated'
-                          ? 'AI-generated alternative'
-                          : button.draft.solution_source === 'generated'
-                            ? 'AI-drafted solution'
-                            : 'Extracted (OCR) solution'
-                      }
-                      draft={button.draft}
+              ) : (
+                <>
+                  <QuestionText problem={problem} />
+                  {Array.isArray(problem.reference_solution) && (
+                    <ReferenceSolutionPreview
+                      heading="Reference solution"
+                      steps={problem.reference_solution}
                     />
-                  ),
+                  )}
+                </>
               )}
-              {buttons.length === 0 && (
-                <p className="text-xs teacher-muted">
-                  No stored draft to approve — delete this set and re-upload it.
-                </p>
-              )}
-              {approveState?.status === 'error' && (
-                <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
-                  {approveState.message}
+
+              {problem.solution_text && (
+                <div className="rounded-xl teacher-panel-soft px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+                    Authored solution
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{problem.solution_text}</p>
                 </div>
               )}
-              {buttons.length > 0 && (
+
+              {outcome === 'rejected' && problem.diagnostic && (
+                <div className="rounded-xl teacher-panel-soft px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+                    Diagnostic
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{problem.diagnostic}</p>
+                </div>
+              )}
+
+              {outcome === 'held_for_review' && problem.confirmation?.status === 'teacher_confirmed_not_promoted' && (
+                <div className="rounded-xl teacher-panel-soft px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide teacher-muted">
+                    Diagnostic
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">
+                    {problem.confirmation.diagnostic || 'The solve check could not verify this draft.'}
+                  </p>
+                </div>
+              )}
+
+              {outcome === 'held_for_review' && reason === 'no_matching_concept' && (
                 <>
                   <p className="text-xs teacher-muted">
-                    Approving promotes the solution so students can teach this problem back.
+                    This question didn&apos;t match any concept in your course list, so no solution was
+                    drafted. Add the missing concept in the Concepts section, then re-upload this set.
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {buttons.map((button) => (
-                      <button
-                        key={button.reference}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onApprove(button.reference)}
-                        className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
-                      >
-                        {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
-                        {pending ? 'Approving…' : button.label}
-                      </button>
-                    ))}
-                  </div>
+                  {onGoToConcepts && (
+                    <button
+                      type="button"
+                      onClick={onGoToConcepts}
+                      className="teacher-button-secondary self-start rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5"
+                    >
+                      <BookOpen className="h-3.5 w-3.5" />
+                      Go to Concepts
+                    </button>
+                  )}
+                </>
+              )}
+
+              {outcome === 'held_for_review' && reason !== 'no_matching_concept' && !problem.confirmation && (
+                <>
+                  {buttons.map(
+                    (button) =>
+                      button.draft && (
+                        <DraftPreview
+                          key={`draft-${button.reference}`}
+                          heading={
+                            button.reference === 'generated'
+                              ? 'AI-generated alternative'
+                              : button.draft.solution_source === 'generated'
+                                ? 'AI-drafted solution'
+                                : 'Extracted (OCR) solution'
+                          }
+                          draft={button.draft}
+                        />
+                      ),
+                  )}
+                  {buttons.length === 0 && (
+                    <p className="text-xs teacher-muted">
+                      No stored draft to approve — delete this set and re-upload it.
+                    </p>
+                  )}
+                  {approveState?.status === 'error' && (
+                    <div className="rounded-xl teacher-alert teacher-alert--danger px-3 py-1.5 text-xs">
+                      {approveState.message}
+                    </div>
+                  )}
+                  {buttons.length > 0 && (
+                    <>
+                      <p className="text-xs teacher-muted">
+                        Approving promotes the solution so students can teach this problem back.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {buttons.map((button) => (
+                          <button
+                            key={button.reference}
+                            type="button"
+                            disabled={pending}
+                            onClick={() => onApprove(button.reference)}
+                            className="teacher-button-secondary rounded-xl px-3 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+                          >
+                            {pending && <RefreshCcw className="h-3 w-3 animate-spin" />}
+                            {pending ? 'Approving…' : button.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </>
+          )}
+
+          {rehomingFailed && (
+            <RehomingFailedBody
+              diagnostic={problem.rehoming?.diagnostic ?? ''}
+              concepts={concepts}
+              pending={assignActionState?.status === 'pending'}
+              error={assignActionState?.status === 'error' ? assignActionState.message : null}
+              onAssign={onAssignConcept}
+            />
           )}
         </div>
       )}
